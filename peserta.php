@@ -21,9 +21,38 @@ $roleIcons = [
 
 $currentTheme = $roleColors[$role];
 
-// Handle actions
-$message = '';
-$messageType = '';
+function uploadFoto($file, $peserta_id) {
+    $target_dir = "uploads/peserta/";
+    if (!file_exists($target_dir)) {
+        mkdir($target_dir, 0777, true);
+    }
+    
+    $file_extension = strtolower(pathinfo($file["name"], PATHINFO_EXTENSION));
+    $new_filename = "peserta_" . $peserta_id . "_" . time() . "." . $file_extension;
+    $target_file = $target_dir . $new_filename;
+    
+    // Check if image file is actual image
+    $check = getimagesize($file["tmp_name"]);
+    if($check === false) {
+        return ['success' => false, 'message' => 'File bukan gambar yang valid'];
+    }
+    
+    // Check file size (max 5MB)
+    if ($file["size"] > 5000000) {
+        return ['success' => false, 'message' => 'Ukuran file terlalu besar (max 5MB)'];
+    }
+    
+    // Allow certain file formats
+    if($file_extension != "jpg" && $file_extension != "png" && $file_extension != "jpeg" && $file_extension != "gif") {
+        return ['success' => false, 'message' => 'Hanya file JPG, JPEG, PNG & GIF yang diizinkan'];
+    }
+    
+    if (move_uploaded_file($file["tmp_name"], $target_file)) {
+        return ['success' => true, 'filename' => $new_filename];
+    } else {
+        return ['success' => false, 'message' => 'Gagal mengupload file'];
+    }
+}
 
 // Tambah peserta
 if (isset($_POST['tambah'])) {
@@ -35,38 +64,83 @@ if (isset($_POST['tambah'])) {
     $alamat = mysqli_real_escape_string($conn, $_POST['alamat']);
     $tanggal_masuk = $_POST['tanggal_masuk'];
     
+    // Insert peserta dulu untuk mendapatkan ID
     $query = "INSERT INTO peserta (nama, email, telepon, institusi_id, user_id, alamat, tanggal_masuk, status_verifikasi) 
               VALUES ('$nama', '$email', '$telepon', '$institusi_id', '$user_id', '$alamat', '$tanggal_masuk', 'pending')";
     
     if (mysqli_query($conn, $query)) {
-        $message = 'Peserta berhasil ditambahkan!';
-        $messageType = 'success';
+        $peserta_id = mysqli_insert_id($conn);
+        
+        // Handle foto upload
+        $foto_filename = null;
+        if (isset($_FILES['foto']) && $_FILES['foto']['error'] == 0) {
+            $upload_result = uploadFoto($_FILES['foto'], $peserta_id);
+            if ($upload_result['success']) {
+                $foto_filename = $upload_result['filename'];
+                // Update dengan foto
+                mysqli_query($conn, "UPDATE peserta SET foto = '$foto_filename' WHERE id = $peserta_id");
+            } else {
+                $message = 'Peserta berhasil ditambahkan, tapi foto gagal diupload: ' . $upload_result['message'];
+                $messageType = 'warning';
+            }
+        }
+        
+        if (!isset($message)) {
+            $message = 'Peserta berhasil ditambahkan!';
+            $messageType = 'success';
+        }
     } else {
         $message = 'Gagal menambahkan peserta: ' . mysqli_error($conn);
         $messageType = 'error';
     }
 }
 
-// Update status verifikasi
-if (isset($_POST['update_status'])) {
+// Update peserta lengkap
+if (isset($_POST['update_peserta'])) {
     $peserta_id = (int)$_POST['peserta_id'];
-    $status = $_POST['status'];
+    $nama = mysqli_real_escape_string($conn, $_POST['nama']);
+    $email = mysqli_real_escape_string($conn, $_POST['email']);
+    $telepon = mysqli_real_escape_string($conn, $_POST['telepon']);
+    $institusi_id = (int)$_POST['institusi_id'];
+    $user_id = (int)$_POST['user_id'];
+    $alamat = mysqli_real_escape_string($conn, $_POST['alamat']);
+    $tanggal_masuk = $_POST['tanggal_masuk'];
+    $status = $_POST['status_verifikasi'];
     
-    $query = "UPDATE peserta SET status_verifikasi = '$status' WHERE id = $peserta_id";
+    $query = "UPDATE peserta SET 
+              nama = '$nama', 
+              email = '$email', 
+              telepon = '$telepon', 
+              institusi_id = $institusi_id, 
+              user_id = $user_id, 
+              alamat = '$alamat', 
+              tanggal_masuk = '$tanggal_masuk',
+              status_verifikasi = '$status'
+              WHERE id = $peserta_id";
+    
     if (mysqli_query($conn, $query)) {
-        $message = 'Status verifikasi berhasil diupdate!';
-        $messageType = 'success';
+        // Handle foto upload
+        if (isset($_FILES['foto']) && $_FILES['foto']['error'] == 0) {
+            $upload_result = uploadFoto($_FILES['foto'], $peserta_id);
+            if ($upload_result['success']) {
+                $foto_filename = $upload_result['filename'];
+                mysqli_query($conn, "UPDATE peserta SET foto = '$foto_filename' WHERE id = $peserta_id");
+            } else {
+                $message = 'Data berhasil diupdate, tapi foto gagal diupload: ' . $upload_result['message'];
+                $messageType = 'warning';
+            }
+        }
+        
+        if (!isset($message)) {
+            $message = 'Data peserta berhasil diupdate!';
+            $messageType = 'success';
+        }
+    } else {
+        $message = 'Gagal mengupdate data: ' . mysqli_error($conn);
+        $messageType = 'error';
     }
 }
 
-// Hapus peserta
-if (isset($_GET['hapus'])) {
-    $id = (int)$_GET['hapus'];
-    if (mysqli_query($conn, "DELETE FROM peserta WHERE id=$id")) {
-        $message = 'Peserta berhasil dihapus!';
-        $messageType = 'success';
-    }
-}
 
 // Get data
 $peserta = mysqli_query($conn, "SELECT p.*, i.nama as institusi, u.nama as user_name 
@@ -658,11 +732,6 @@ $peserta_rejected = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as t
                 <p class="subtitle">Kelola data peserta dengan mudah dan efisien</p>
             </div>
 
-            <?php if ($message): ?>
-                <div class="alert alert-<?= $messageType ?>">
-                    <?= $message ?>
-                </div>
-            <?php endif; ?>
 
             <!-- Statistics -->
             <div class="stats-grid">
@@ -697,83 +766,227 @@ $peserta_rejected = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as t
             </div>
 
             <?php if ($role == 'admin'): ?>
-            <!-- Form Tambah Peserta -->
-            <div class="content-card">
-                <div class="card-header">
-                    <h3>
-                        <i class="fas fa-plus"></i>
-                        Tambah Peserta Baru
-                    </h3>
-                </div>
-                <div class="card-body">
-                    <form method="post">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label class="form-label">Nama Lengkap *</label>
-                                    <input type="text" name="nama" class="form-control" placeholder="Masukkan nama lengkap" required>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label class="form-label">Email *</label>
-                                    <input type="email" name="email" class="form-control" placeholder="email@domain.com" required>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label class="form-label">Telepon</label>
-                                    <input type="tel" name="telepon" class="form-control" placeholder="08xxxxxxxxxx">
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label class="form-label">Tanggal Masuk *</label>
-                                    <input type="date" name="tanggal_masuk" class="form-control" required>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label class="form-label">Institusi *</label>
-                                    <select name="institusi_id" class="form-control" required>
-                                        <option value="" disabled selected>Pilih Institusi</option>
-                                        <?php 
-                                        mysqli_data_seek($institusi, 0);
-                                        while($i = mysqli_fetch_assoc($institusi)): ?>
-                                            <option value="<?= $i['id'] ?>"><?= htmlspecialchars($i['nama']) ?></option>
-                                        <?php endwhile; ?>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label class="form-label">Akun User *</label>
-                                    <select name="user_id" class="form-control" required>
-                                        <option value="" disabled selected>Pilih User</option>
-                                        <?php 
-                                        mysqli_data_seek($users, 0);
-                                        while($u = mysqli_fetch_assoc($users)): ?>
-                                            <option value="<?= $u['id'] ?>"><?= htmlspecialchars($u['nama']) ?></option>
-                                        <?php endwhile; ?>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Alamat</label>
-                            <textarea name="alamat" class="form-control" rows="3" placeholder="Alamat lengkap"></textarea>
-                        </div>
-                        <button type="submit" name="tambah" class="btn btn-primary">
+                <!-- Form Tambah Peserta -->
+                <div class="content-card">
+                    <div class="card-header">
+                        <h3>
                             <i class="fas fa-plus"></i>
-                            Tambah Peserta
-                        </button>
-                    </form>
+                            Tambah Peserta Baru
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="post" enctype="multipart/form-data">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label class="form-label">Foto Profil</label>
+                                        <div class="foto-upload-container" style="text-align: center; margin-bottom: 1rem;">
+                                            <div class="foto-preview" style="width: 150px; height: 150px; border: 2px dashed #d1d5db; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; background: #f9fafb; position: relative; overflow: hidden;">
+                                                <div class="foto-placeholder" id="fotoPlaceholder">
+                                                    <i class="fas fa-camera" style="font-size: 2rem; color: #9ca3af; margin-bottom: 0.5rem;"></i>
+                                                    <p style="color: #6b7280; font-size: 0.875rem; margin: 0;">Upload Foto</p>
+                                                </div>
+                                                <img id="fotoPreview" style="width: 100%; height: 100%; object-fit: cover; display: none;" alt="Preview Foto">
+                                            </div>
+                                            <input type="file" name="foto" id="fotoInput" accept="image/*" style="display: none;">
+                                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="document.getElementById('fotoInput').click()">
+                                                <i class="fas fa-upload"></i> Pilih Foto
+                                            </button>
+                                            <p style="font-size: 0.75rem; color: #6b7280; margin-top: 0.5rem;">Max 5MB (JPG, PNG, GIF)</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-8">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label class="form-label">Nama Lengkap *</label>
+                                                <input type="text" name="nama" class="form-control" placeholder="Masukkan nama lengkap" required>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label class="form-label">Email *</label>
+                                                <input type="email" name="email" class="form-control" placeholder="email@domain.com" required>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label class="form-label">Telepon</label>
+                                                <input type="tel" name="telepon" class="form-control" placeholder="08xxxxxxxxxx">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label class="form-label">Tanggal Masuk *</label>
+                                                <input type="date" name="tanggal_masuk" class="form-control" required>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">Institusi *</label>
+                                        <select name="institusi_id" class="form-control" required>
+                                            <option value="" disabled selected>Pilih Institusi</option>
+                                            <?php 
+                                            mysqli_data_seek($institusi, 0);
+                                            while($i = mysqli_fetch_assoc($institusi)): ?>
+                                                <option value="<?= $i['id'] ?>"><?= htmlspecialchars($i['nama']) ?></option>
+                                            <?php endwhile; ?>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">Akun User *</label>
+                                        <select name="user_id" class="form-control" required>
+                                            <option value="" disabled selected>Pilih User</option>
+                                            <?php 
+                                            mysqli_data_seek($users, 0);
+                                            while($u = mysqli_fetch_assoc($users)): ?>
+                                                <option value="<?= $u['id'] ?>"><?= htmlspecialchars($u['nama']) ?></option>
+                                            <?php endwhile; ?>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Alamat</label>
+                                <textarea name="alamat" class="form-control" rows="3" placeholder="Alamat lengkap"></textarea>
+                            </div>
+                            <button type="submit" name="tambah" class="btn btn-primary">
+                                <i class="fas fa-plus"></i>
+                                Tambah Peserta
+                            </button>
+                        </form>
+                    </div>
                 </div>
-            </div>
+
+                <!-- Modal Edit Peserta -->
+                <div id="editModal" class="modal">
+                    <div class="modal-content" style="max-width: 800px;">
+                        <div class="modal-header">
+                            <h4>Edit Data Peserta</h4>
+                            <span class="close" onclick="closeModal('editModal')">&times;</span>
+                        </div>
+                        <div class="modal-body">
+                            <form method="post" id="editForm" enctype="multipart/form-data">
+                                <input type="hidden" name="peserta_id" id="editPesertaId">
+                                
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="form-group">
+                                            <label class="form-label">Foto Profil</label>
+                                            <div class="foto-upload-container" style="text-align: center; margin-bottom: 1rem;">
+                                                <div class="foto-preview" style="width: 150px; height: 150px; border: 2px dashed #d1d5db; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; background: #f9fafb; position: relative; overflow: hidden;">
+                                                    <div class="foto-placeholder" id="editFotoPlaceholder">
+                                                        <i class="fas fa-camera" style="font-size: 2rem; color: #9ca3af; margin-bottom: 0.5rem;"></i>
+                                                        <p style="color: #6b7280; font-size: 0.875rem; margin: 0;">Upload Foto</p>
+                                                    </div>
+                                                    <img id="editFotoPreview" style="width: 100%; height: 100%; object-fit: cover; display: none;" alt="Preview Foto Edit">
+                                                </div>
+                                                <input type="file" name="foto" id="editFotoInput" accept="image/*" style="display: none;">
+                                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="document.getElementById('editFotoInput').click()">
+                                                    <i class="fas fa-upload"></i> Ubah Foto
+                                                </button>
+                                                <p style="font-size: 0.75rem; color: #6b7280; margin-top: 0.5rem;">Max 5MB (JPG, PNG, GIF)</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="form-group">
+                                                    <label class="form-label">Nama Lengkap *</label>
+                                                    <input type="text" name="nama" id="editNama" class="form-control" required>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="form-group">
+                                                    <label class="form-label">Email *</label>
+                                                    <input type="email" name="email" id="editEmail" class="form-control" required>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="form-group">
+                                                    <label class="form-label">Telepon</label>
+                                                    <input type="tel" name="telepon" id="editTelepon" class="form-control">
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="form-group">
+                                                    <label class="form-label">Tanggal Masuk *</label>
+                                                    <input type="date" name="tanggal_masuk" id="editTanggalMasuk" class="form-control" required>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="form-group">
+                                            <label class="form-label">Institusi *</label>
+                                            <select name="institusi_id" id="editInstitusi" class="form-control" required>
+                                                <option value="">Pilih Institusi</option>
+                                                <?php 
+                                                mysqli_data_seek($institusi, 0);
+                                                while($i = mysqli_fetch_assoc($institusi)): ?>
+                                                    <option value="<?= $i['id'] ?>"><?= htmlspecialchars($i['nama']) ?></option>
+                                                <?php endwhile; ?>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-group">
+                                            <label class="form-label">Akun User *</label>
+                                            <select name="user_id" id="editUser" class="form-control" required>
+                                                <option value="">Pilih User</option>
+                                                <?php 
+                                                mysqli_data_seek($users, 0);
+                                                while($u = mysqli_fetch_assoc($users)): ?>
+                                                    <option value="<?= $u['id'] ?>"><?= htmlspecialchars($u['nama']) ?></option>
+                                                <?php endwhile; ?>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-group">
+                                            <label class="form-label">Status Verifikasi</label>
+                                            <select name="status_verifikasi" id="editStatus" class="form-control">
+                                                <option value="pending">Pending</option>
+                                                <option value="verified">Verified</option>
+                                                <option value="rejected">Rejected</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="form-label">Alamat</label>
+                                    <textarea name="alamat" id="editAlamat" class="form-control" rows="3"></textarea>
+                                </div>
+                                
+                                <div style="text-align: right; margin-top: 1.5rem;">
+                                    <button type="button" class="btn btn-secondary" onclick="closeModal('editModal')" style="margin-right: 0.5rem;">
+                                        Batal
+                                    </button>
+                                    <button type="submit" name="update_peserta" class="btn btn-primary">
+                                        <i class="fas fa-save"></i>
+                                        Simpan Perubahan
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
             <?php endif; ?>
 
             <!-- Daftar Peserta -->
@@ -813,16 +1026,19 @@ $peserta_rejected = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as t
                                         </span>
                                     </td>
                                     <td>
-                                        <button class="btn btn-sm btn-primary" onclick="showDetail(<?= $p['id'] ?>)">
+                                        <button class="btn btn-sm btn-primary" onclick="showDetail(<?= $p['id'] ?>)" title="Lihat Detail">
                                             <i class="fas fa-eye"></i>
                                         </button>
                                         <?php if ($role == 'admin'): ?>
-                                        <button class="btn btn-sm btn-warning" onclick="showStatusModal(<?= $p['id'] ?>, '<?= $p['status_verifikasi'] ?? 'pending' ?>')">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                        <a href="?hapus=<?= $p['id'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('Apakah Anda yakin ingin menghapus peserta ini?')">
-                                            <i class="fas fa-trash"></i>
-                                        </a>
+                                            <button class="btn btn-sm btn-success" onclick="showEditModal(<?= $p['id'] ?>)" title="Edit">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-warning" onclick="showStatusModal(<?= $p['id'] ?>, '<?= $p['status_verifikasi'] ?? 'pending' ?>')" title="Update Status">
+                                                <i class="fas fa-check-circle"></i>
+                                            </button>
+                                            <a href="?hapus=<?= $p['id'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('Apakah Anda yakin ingin menghapus peserta ini?')" title="Hapus">
+                                                <i class="fas fa-trash"></i>
+                                            </a>
                                         <?php endif; ?>
                                     </td>
                                 </tr>
@@ -861,7 +1077,7 @@ $peserta_rejected = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as t
         </div>
     </div>
 
-    <!-- Modal Update Status -->
+<!-- Modal Update Status -->
     <?php if ($role == 'admin'): ?>
     <div id="statusModal" class="modal">
         <div class="modal-content">
@@ -899,11 +1115,113 @@ $peserta_rejected = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as t
     <script>
         // Modal functions
         function showModal(modalId) {
-            document.getElementById(modalId).style.display = 'block';
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.style.display = 'block';
+            }
         }
 
         function closeModal(modalId) {
-            document.getElementById(modalId).style.display = 'none';
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        // Foto preview functions
+        function previewFoto(input, previewId, placeholderId) {
+            const file = input.files[0];
+            const preview = document.getElementById(previewId);
+            const placeholder = document.getElementById(placeholderId);
+            
+            if (file && preview && placeholder) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                    placeholder.style.display = 'none';
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // Initialize foto input listeners when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            const fotoInput = document.getElementById('fotoInput');
+            const editFotoInput = document.getElementById('editFotoInput');
+            
+            if (fotoInput) {
+                fotoInput.addEventListener('change', function() {
+                    previewFoto(this, 'fotoPreview', 'fotoPlaceholder');
+                });
+            }
+
+            if (editFotoInput) {
+                editFotoInput.addEventListener('change', function() {
+                    previewFoto(this, 'editFotoPreview', 'editFotoPlaceholder');
+                });
+            }
+        });
+
+        // Show edit modal
+        function showEditModal(pesertaId) {
+            showModal('editModal');
+            
+            // Fetch data via AJAX
+            fetch(`get_peserta_detail.php?id=${pesertaId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        const peserta = data.peserta;
+                        
+                        // Fill form fields with null checks
+                        const fields = {
+                            'editPesertaId': pesertaId,
+                            'editNama': peserta.nama || '',
+                            'editEmail': peserta.email || '',
+                            'editTelepon': peserta.telepon || '',
+                            'editTanggalMasuk': peserta.tanggal_masuk || '',
+                            'editInstitusi': peserta.institusi_id || '',
+                            'editUser': peserta.user_id || '',
+                            'editStatus': peserta.status_verifikasi || 'pending',
+                            'editAlamat': peserta.alamat || ''
+                        };
+
+                        // Set form values
+                        Object.keys(fields).forEach(fieldId => {
+                            const field = document.getElementById(fieldId);
+                            if (field) {
+                                field.value = fields[fieldId];
+                            }
+                        });
+                        
+                        // Handle photo preview
+                        const editPreview = document.getElementById('editFotoPreview');
+                        const editPlaceholder = document.getElementById('editFotoPlaceholder');
+                        
+                        if (editPreview && editPlaceholder) {
+                            if (peserta.foto) {
+                                editPreview.src = 'uploads/peserta/' + peserta.foto;
+                                editPreview.style.display = 'block';
+                                editPlaceholder.style.display = 'none';
+                            } else {
+                                editPreview.style.display = 'none';
+                                editPlaceholder.style.display = 'flex';
+                            }
+                        }
+                    } else {
+                        alert('Gagal memuat data peserta: ' + (data.message || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Terjadi kesalahan saat memuat data');
+                });
         }
 
         // Show detail modal
@@ -912,14 +1230,36 @@ $peserta_rejected = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as t
             
             // Fetch detail data via AJAX
             fetch(`get_peserta_detail.php?id=${pesertaId}`)
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
                 .then(data => {
+                    const detailContent = document.getElementById('detailContent');
+                    if (!detailContent) return;
+
                     if (data.success) {
                         const peserta = data.peserta;
                         const statusClass = peserta.status_verifikasi || 'pending';
-                        const statusText = peserta.status_verifikasi ? peserta.status_verifikasi.charAt(0).toUpperCase() + peserta.status_verifikasi.slice(1) : 'Pending';
+                        const statusText = peserta.status_verifikasi ? 
+                            peserta.status_verifikasi.charAt(0).toUpperCase() + peserta.status_verifikasi.slice(1) : 
+                            'Pending';
                         
-                        document.getElementById('detailContent').innerHTML = `
+                        // Foto section
+                        const fotoSection = peserta.foto ? 
+                            `<div style="text-align: center; margin-bottom: 1.5rem;">
+                                <img src="uploads/peserta/${peserta.foto}" alt="Foto ${peserta.nama || 'Peserta'}" style="width: 150px; height: 150px; object-fit: cover; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+                            </div>` : 
+                            `<div style="text-align: center; margin-bottom: 1.5rem;">
+                                <div style="width: 150px; height: 150px; background: #f3f4f6; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
+                                    <i class="fas fa-user" style="font-size: 3rem; color: #9ca3af;"></i>
+                                </div>
+                            </div>`;
+                        
+                        detailContent.innerHTML = `
+                            ${fotoSection}
                             <div class="row">
                                 <div class="col-md-6">
                                     <h6 style="color: var(--primary-color); margin-bottom: 0.5rem;">Informasi Pribadi</h6>
@@ -942,27 +1282,36 @@ $peserta_rejected = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as t
                             </div>
                         `;
                     } else {
-                        document.getElementById('detailContent').innerHTML = `
+                        detailContent.innerHTML = `
                             <div class="alert alert-error">
-                                Gagal memuat detail peserta: ${data.message}
+                                Gagal memuat detail peserta: ${data.message || 'Unknown error'}
                             </div>
                         `;
                     }
                 })
                 .catch(error => {
-                    document.getElementById('detailContent').innerHTML = `
-                        <div class="alert alert-error">
-                            Terjadi kesalahan saat memuat data
-                        </div>
-                    `;
+                    console.error('Error:', error);
+                    const detailContent = document.getElementById('detailContent');
+                    if (detailContent) {
+                        detailContent.innerHTML = `
+                            <div class="alert alert-error">
+                                Terjadi kesalahan saat memuat data
+                            </div>
+                        `;
+                    }
                 });
         }
 
         // Show status modal
         function showStatusModal(pesertaId, currentStatus) {
-            document.getElementById('statusPesertaId').value = pesertaId;
-            document.getElementById('statusSelect').value = currentStatus;
-            showModal('statusModal');
+            const statusPesertaId = document.getElementById('statusPesertaId');
+            const statusSelect = document.getElementById('statusSelect');
+            
+            if (statusPesertaId && statusSelect) {
+                statusPesertaId.value = pesertaId;
+                statusSelect.value = currentStatus;
+                showModal('statusModal');
+            }
         }
 
         // Close modal when clicking outside
@@ -976,35 +1325,68 @@ $peserta_rejected = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as t
         }
 
         // Add smooth transitions
-        document.querySelectorAll('.stat-card, .btn').forEach(element => {
-            element.addEventListener('mouseenter', function() {
-                if (this.classList.contains('stat-card')) {
-                    this.style.transform = 'translateY(-5px)';
-                }
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.stat-card, .btn').forEach(element => {
+                element.addEventListener('mouseenter', function() {
+                    if (this.classList.contains('stat-card')) {
+                        this.style.transform = 'translateY(-5px)';
+                    }
+                });
+                
+                element.addEventListener('mouseleave', function() {
+                    if (this.classList.contains('stat-card')) {
+                        this.style.transform = 'translateY(0)';
+                    }
+                });
             });
-            
-            element.addEventListener('mouseleave', function() {
-                if (this.classList.contains('stat-card')) {
-                    this.style.transform = 'translateY(0)';
-                }
+
+            // Auto hide alerts
+            setTimeout(() => {
+                const alerts = document.querySelectorAll('.alert');
+                alerts.forEach(alert => {
+                    alert.style.transition = 'opacity 0.3s, transform 0.3s';
+                    alert.style.opacity = '0';
+                    alert.style.transform = 'translateY(-10px)';
+                    setTimeout(() => {
+                        if (alert.parentNode) {
+                            alert.parentNode.removeChild(alert);
+                        }
+                    }, 300);
+                });
+            }, 5000);
+
+            // Form validation
+            document.querySelectorAll('form').forEach(form => {
+                form.addEventListener('submit', function(e) {
+                    const requiredFields = form.querySelectorAll('[required]');
+                    let isValid = true;
+                    
+                    requiredFields.forEach(field => {
+                        if (!field.value.trim()) {
+                            field.style.borderColor = '#ef4444';
+                            isValid = false;
+                        } else {
+                            field.style.borderColor = '#d1d5db';
+                        }
+                    });
+                    
+                    if (!isValid) {
+                        e.preventDefault();
+                        alert('Mohon lengkapi semua field yang wajib diisi!');
+                    }
+                });
             });
         });
 
-        // Auto hide alerts
-        setTimeout(() => {
-            const alerts = document.querySelectorAll('.alert');
-            alerts.forEach(alert => {
-                alert.style.opacity = '0';
-                alert.style.transform = 'translateY(-10px)';
-                setTimeout(() => alert.remove(), 300);
-            });
-        }, 5000);
-
-        // Search functionality (if needed)
+        // Search functionality
         function filterTable() {
             const input = document.getElementById('searchInput');
+            if (!input) return;
+            
             const filter = input.value.toUpperCase();
             const table = document.querySelector('.table tbody');
+            if (!table) return;
+            
             const rows = table.getElementsByTagName('tr');
 
             for (let i = 0; i < rows.length; i++) {
@@ -1021,28 +1403,6 @@ $peserta_rejected = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as t
                 rows[i].style.display = found ? '' : 'none';
             }
         }
-
-        // Form validation
-        document.querySelectorAll('form').forEach(form => {
-            form.addEventListener('submit', function(e) {
-                const requiredFields = form.querySelectorAll('[required]');
-                let isValid = true;
-                
-                requiredFields.forEach(field => {
-                    if (!field.value.trim()) {
-                        field.style.borderColor = '#ef4444';
-                        isValid = false;
-                    } else {
-                        field.style.borderColor = '#d1d5db';
-                    }
-                });
-                
-                if (!isValid) {
-                    e.preventDefault();
-                    alert('Mohon lengkapi semua field yang wajib diisi!');
-                }
-            });
-        });
     </script>
 </body>
 </html>
