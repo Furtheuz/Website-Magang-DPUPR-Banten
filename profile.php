@@ -606,12 +606,6 @@ if($role === 'user') {
                             Profil
                         </a>
                     </div>
-                    <div class="nav-item">
-                        <a class="nav-link" href="tugas.php">
-                            <i class="fas fa-tasks"></i>
-                            Tugas
-                        </a>
-                    </div>
                 <?php endif; ?>
                 
                 <div class="nav-item logout-link">

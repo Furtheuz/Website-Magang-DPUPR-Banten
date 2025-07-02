@@ -539,12 +539,6 @@ if ($role == 'user') {
                         </a>
                     </div>
                     <div class="nav-item">
-                        <a class="nav-link" href="institusi.php">
-                            <i class="fas fa-building"></i>
-                            Institusi
-                        </a>
-                    </div>
-                    <div class="nav-item">
                         <a class="nav-link" href="jadwal.php">
                             <i class="fas fa-calendar-alt"></i>
                             Jadwal
@@ -622,12 +616,6 @@ if ($role == 'user') {
                         <a class="nav-link" href="profile.php">
                             <i class="fas fa-user"></i>
                             Profil
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link" href="tugas.php">
-                            <i class="fas fa-tasks"></i>
-                            Tugas
                         </a>
                     </div>
                 <?php endif; ?>
