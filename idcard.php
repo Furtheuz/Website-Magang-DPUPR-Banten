@@ -1,15 +1,16 @@
-<?php 
-include "config/auth.php"; 
-include "config/db.php"; 
-checkLogin(); 
+<?php
+include "config/auth.php";
+include "config/db.php";
+checkLogin();
 
-$role = $_SESSION['user']['role']; 
-$userName = $_SESSION['user']['name'] ?? 'User';
+$role = $_SESSION['user']['role'];
+$userName = $_SESSION['user']['nama'] ?? 'User';
+$pesan = '';
 
 // Role-based styling
 $roleColors = [
-    'admin' => ['primary' => '#dc2626', 'secondary' => '#fef2f2', 'accent' => '#b91c1c'],
-    'pembimbing' => ['primary' => '#059669', 'secondary' => '#f0fdf4', 'accent' => '#047857'],
+    'admin' => ['primary' => '#2563eb', 'secondary' => '#eff6ff', 'accent' => '#1d4ed8'],
+    'pembimbing' => ['primary' => '#2563eb', 'secondary' => '#eff6ff', 'accent' => '#1d4ed8'],
     'user' => ['primary' => '#2563eb', 'secondary' => '#eff6ff', 'accent' => '#1d4ed8']
 ];
 
@@ -19,17 +20,30 @@ $roleIcons = [
     'user' => '👨‍🎓'
 ];
 
-$currentTheme = $roleColors[$role];
+$currentTheme = ['primary' => '#2563eb', 'secondary' => '#eff6ff', 'accent' => '#1d4ed8'];
+
+// Handle delete action
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['hapus_peserta']) && $role == 'admin') {
+    $peserta_id = (int)($_POST['peserta_id'] ?? 0);
+    if ($peserta_id > 0) {
+        $stmt = $conn->prepare("DELETE FROM peserta WHERE id = ?");
+        $stmt->bind_param("i", $peserta_id);
+        $pesan = $stmt->execute() && $stmt->affected_rows > 0
+            ? '<div class="alert alert-success"><i class="fas fa-check-circle"></i> Peserta berhasil dihapus!</div>'
+            : '<div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> Gagal menghapus peserta!</div>';
+        $stmt->close();
+    }
+}
 
 // Query untuk mendapatkan data peserta
-$peserta = mysqli_query($conn, "SELECT p.*, u.nama as nama_user FROM peserta p JOIN users u ON p.user_id=u.id ORDER BY p.nama ASC");
+$peserta = mysqli_query($conn, "SELECT p.* FROM peserta p JOIN users u ON p.user_id=u.id ORDER BY p.nama ASC");
 
 // Check if query was successful before using mysqli_num_rows
 if ($peserta) {
     $totalPeserta = mysqli_num_rows($peserta);
 } else {
     $totalPeserta = 0;
-    echo "Error in peserta query: " . mysqli_error($conn);
+    $pesan = "<div class='alert alert-danger'><i class='fas fa-exclamation-circle'></i> Error in peserta query: " . mysqli_error($conn) . "</div>";
 }
 
 // Query untuk statistik with error checking
@@ -42,6 +56,7 @@ $pesertaSelesai = $pesertaSelesaiQuery ? mysqli_num_rows($pesertaSelesaiQuery) :
 $riwayatCetakQuery = mysqli_query($conn, "SELECT * FROM riwayat_cetak_idcard");
 $riwayatCetak = $riwayatCetakQuery ? mysqli_num_rows($riwayatCetakQuery) : 0;
 ?>
+
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -51,7 +66,6 @@ $riwayatCetak = $riwayatCetakQuery ? mysqli_num_rows($riwayatCetakQuery) : 0;
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
     <style>
         :root {
             --primary-color: <?= $currentTheme['primary'] ?>;
@@ -284,68 +298,6 @@ $riwayatCetak = $riwayatCetakQuery ? mysqli_num_rows($riwayatCetakQuery) : 0;
             margin-bottom: 0.25rem;
         }
         
-        .actions-section {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 16px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            border: 1px solid rgba(0,0,0,0.05);
-            margin-bottom: 2rem;
-        }
-        
-        .actions-section h3 {
-            font-weight: 600;
-            margin-bottom: 1rem;
-            color: #1f2937;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
-        .action-btn {
-            background: var(--secondary-color);
-            color: var(--primary-color);
-            border: 1px solid var(--primary-color);
-            padding: 0.75rem 1.5rem;
-            border-radius: 10px;
-            text-decoration: none;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin: 0.25rem 0.5rem 0.25rem 0;
-        }
-        
-        .action-btn:hover {
-            background: var(--primary-color);
-            color: white;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-        }
-        
-        .action-btn.success {
-            background: #f0fdf4;
-            color: #059669;
-            border-color: #059669;
-        }
-        
-        .action-btn.success:hover {
-            background: #059669;
-            color: white;
-        }
-        
-        .action-btn.warning {
-            background: #fffbeb;
-            color: #d97706;
-            border-color: #d97706;
-        }
-        
-        .action-btn.warning:hover {
-            background: #d97706;
-            color: white;
-        }
-        
         .table-container {
             background: white;
             border-radius: 16px;
@@ -359,7 +311,7 @@ $riwayatCetak = $riwayatCetakQuery ? mysqli_num_rows($riwayatCetakQuery) : 0;
             color: white;
             padding: 1.5rem;
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
         }
         
@@ -404,12 +356,14 @@ $riwayatCetak = $riwayatCetakQuery ? mysqli_num_rows($riwayatCetakQuery) : 0;
             text-transform: uppercase;
             font-size: 0.875rem;
             letter-spacing: 0.05em;
+            text-align: center;
         }
         
         .table tbody td {
             padding: 1rem;
             border-top: 1px solid #e5e7eb;
             vertical-align: middle;
+            text-align: center;
         }
         
         .table tbody tr:hover {
@@ -442,6 +396,7 @@ $riwayatCetak = $riwayatCetakQuery ? mysqli_num_rows($riwayatCetakQuery) : 0;
         .action-group {
             display: flex;
             gap: 0.5rem;
+            justify-content: center;
         }
         
         .btn-sm {
@@ -458,40 +413,39 @@ $riwayatCetak = $riwayatCetakQuery ? mysqli_num_rows($riwayatCetakQuery) : 0;
             gap: 0.25rem;
         }
         
-        .btn-primary {
-            background: var(--primary-color);
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
             color: white;
         }
         
-        .btn-primary:hover {
-            background: var(--accent-color);
+        .btn-danger:hover {
             transform: translateY(-1px);
-        }
-        
-        .btn-success {
-            background: #059669;
-            color: white;
-        }
-        
-        .btn-success:hover {
-            background: #047857;
-            transform: translateY(-1px);
-        }
-        
-        .btn-info {
-            background: #0891b2;
-            color: white;
-        }
-        
-        .btn-info:hover {
-            background: #0e7490;
-            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.3);
         }
         
         .pagination-wrapper {
             padding: 1.5rem;
             background: #f8fafc;
             border-top: 1px solid #e5e7eb;
+        }
+        
+        .alert {
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .alert-danger {
+            background: #fee2e2;
+            color: #991b1b;
         }
         
         @media (max-width: 768px) {
@@ -519,12 +473,6 @@ $riwayatCetak = $riwayatCetakQuery ? mysqli_num_rows($riwayatCetakQuery) : 0;
                 grid-template-columns: 1fr;
             }
             
-            .action-btn {
-                width: 100%;
-                margin: 0.25rem 0;
-                justify-content: center;
-            }
-            
             .table-responsive {
                 overflow-x: auto;
             }
@@ -533,7 +481,7 @@ $riwayatCetak = $riwayatCetakQuery ? mysqli_num_rows($riwayatCetakQuery) : 0;
 </head>
 <body>
     <div class="dashboard-container">
-        <!-- Sidebar (same as dashboard) -->
+        <!-- Sidebar -->
         <nav class="sidebar">
             <div class="user-profile">
                 <div class="user-avatar">
@@ -542,59 +490,34 @@ $riwayatCetak = $riwayatCetakQuery ? mysqli_num_rows($riwayatCetakQuery) : 0;
                 <div class="user-name"><?= htmlspecialchars($userName) ?></div>
                 <div class="user-role"><?= ucfirst($role) ?></div>
             </div>
-            
             <div class="nav-menu">
-                <div class="nav-item">
-                    <a class="nav-link" href="dashboard.php">
-                        <i class="fas fa-tachometer-alt"></i>
-                        Dashboard
-                    </a>
-                </div>
-                <?php if ($role == 'admin'): ?>
-                    <div class="nav-item">
-                        <a class="nav-link" href="peserta.php">
-                            <i class="fas fa-users"></i>
-                            Data Peserta
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link" href="jadwal.php">
-                            <i class="fas fa-calendar-alt"></i>
-                            Jadwal
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link" href="laporan.php">
-                            <i class="fas fa-chart-line"></i>
-                            Laporan
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link active" href="idcard.php">
-                            <i class="fas fa-id-card"></i>
-                            Cetak ID Card
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link" href="arsip.php">
-                            <i class="fas fa-archive"></i>
-                            Arsip
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link" href="settings.php">
-                            <i class="fas fa-cog"></i>
-                            Pengaturan
-                        </a>
-                    </div>
-                <?php endif; ?>
-                
-                <div class="nav-item logout-link">
-                    <a class="nav-link" href="logout.php">
-                        <i class="fas fa-sign-out-alt"></i>
-                        Logout
-                    </a>
-                </div>
+                <?php
+                $navItems = [
+                    'admin' => [
+                        ['dashboard.php', 'fas fa-home', 'Dashboard'],
+                        ['peserta.php', 'fas fa-users', 'Data Peserta'],
+                        ['schedule_report.php?tab=jadwal', 'fas fa-calendar-alt', 'Jadwal & Laporan'],
+                        ['idcard.php', 'fas fa-id-card', 'Cetak ID Card'],
+                        ['profile.php', 'fas fa-user', 'Profil']
+                    ],
+                    'pembimbing' => [
+                        ['dashboard.php', 'fas fa-home', 'Dashboard'],
+                        ['schedule_report.php?tab=jadwal', 'fas fa-calendar-check', 'Jadwal & Laporan'],
+                        ['profile.php', 'fas fa-user', 'Profil']
+                    ],
+                    'user' => [
+                        ['dashboard.php', 'fas fa-home', 'Dashboard'],
+                        ['schedule_report.php?tab=jadwal', 'fas fa-calendar', 'Jadwal & Laporan'],
+                        ['profile.php', 'fas fa-user', 'Profil']
+                    ]
+                ];
+                foreach ($navItems[$role] as $item) {
+                    list($href, $icon, $title) = $item;
+                    $active = strpos($href, 'idcard.php') !== false ? 'active' : '';
+                    echo "<div class='nav-item'><a class='nav-link $active' href='$href'><i class='$icon'></i> $title</a></div>";
+                }
+                ?>
+                <div class="nav-item logout-link"><a class="nav-link" href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a></div>
             </div>
         </nav>
 
@@ -602,79 +525,43 @@ $riwayatCetak = $riwayatCetakQuery ? mysqli_num_rows($riwayatCetakQuery) : 0;
         <main class="main-content">
             <!-- Header -->
             <div class="header">
-                <h1>
-                    <i class="fas fa-id-card"></i>
-                    ID Card Peserta
-                </h1>
+                <h1><i class="fas fa-id-card"></i> ID Card Peserta</h1>
                 <p class="subtitle">Kelola dan cetak ID Card untuk semua peserta dengan mudah</p>
             </div>
+
+            <?= $pesan ?>
 
             <!-- Statistics -->
             <div class="stats-grid">
                 <div class="stat-card">
-                    <div class="stat-icon">
-                        <i class="fas fa-users"></i>
-                    </div>
+                    <div class="stat-icon"><i class="fas fa-users"></i></div>
                     <div class="stat-title">Total Peserta</div>
                     <div class="stat-value"><?= $totalPeserta ?></div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-icon">
-                        <i class="fas fa-user-check"></i>
-                    </div>
+                    <div class="stat-icon"><i class="fas fa-user-check"></i></div>
                     <div class="stat-title">Peserta Aktif</div>
                     <div class="stat-value"><?= $pesertaAktif ?></div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-icon">
-                        <i class="fas fa-user-graduate"></i>
-                    </div>
+                    <div class="stat-icon"><i class="fas fa-user-graduate"></i></div>
                     <div class="stat-title">Peserta Selesai</div>
                     <div class="stat-value"><?= $pesertaSelesai ?></div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-icon">
-                        <i class="fas fa-print"></i>
-                    </div>
+                    <div class="stat-icon"><i class="fas fa-print"></i></div>
                     <div class="stat-title">Riwayat Cetak</div>
                     <div class="stat-value"><?= $riwayatCetak ?></div>
-                </div>
-            </div>
-
-            <!-- Actions Section -->
-            <div class="actions-section">
-                <h3>
-                    <i class="fas fa-tools"></i>
-                    Aksi Cetak ID Card
-                </h3>
-                <div>
-                    <a href="generate_qr.php" class="action-btn">
-                        <i class="fas fa-qrcode"></i>
-                        Generate QR Code
-                    </a>
-                    <a href="riwayat_cetak.php" class="action-btn warning">
-                        <i class="fas fa-history"></i>
-                        Riwayat Cetak
-                    </a>
-                    <a href="template_idcard.php" class="action-btn">
-                        <i class="fas fa-palette"></i>
-                        Template ID Card
-                    </a>
                 </div>
             </div>
 
             <!-- Table Container -->
             <div class="table-container">
                 <div class="table-header">
-                    <h3>
-                        <i class="fas fa-list"></i>
-                        Daftar Peserta
-                    </h3>
+                    <h3><i class="fas fa-list"></i> Daftar Peserta</h3>
                     <div class="search-box">
                         <input type="text" class="search-input" placeholder="Cari peserta..." id="searchInput">
-                        <button class="btn btn-light btn-sm" onclick="searchPeserta()">
-                            <i class="fas fa-search"></i>
-                        </button>
+                        <button class="btn btn-light btn-sm" onclick="searchPeserta()"><i class="fas fa-search"></i></button>
                     </div>
                 </div>
                 
@@ -682,95 +569,62 @@ $riwayatCetak = $riwayatCetakQuery ? mysqli_num_rows($riwayatCetakQuery) : 0;
                     <table class="table">
                         <thead>
                             <tr>
-                                <th>
-                                    <input type="checkbox" id="selectAll" onchange="toggleAllCheckbox()">
-                                </th>
+                                <th><input type="checkbox" id="selectAll" onchange="toggleAllCheckbox()"></th>
                                 <th>Nama Peserta</th>
                                 <th>Status</th>
-                                <th>QR Code</th>
                                 <th>Terakhir Dicetak</th>
                                 <th>Aksi</th>
                             </tr>
                         </thead>
-                      <tbody id="pesertaTable">
+                        <tbody id="pesertaTable">
                             <?php 
-                            // Reset pointer and check if $peserta is valid
                             if ($peserta && mysqli_num_rows($peserta) > 0) {
-                                mysqli_data_seek($peserta, 0); // Reset pointer
-                                while($p = mysqli_fetch_assoc($peserta)): 
-                                    // Check riwayat cetak with error handling
-                                    $lastPrintQuery = mysqli_query($conn, "SELECT created_at FROM riwayat_cetak_idcard WHERE peserta_id = '".$p['id']."' ORDER BY created_at DESC LIMIT 1");
-                                    $lastPrintData = null;
-                                    if ($lastPrintQuery) {
-                                        $lastPrintData = mysqli_fetch_assoc($lastPrintQuery);
-                                    }
+                                mysqli_data_seek($peserta, 0);
+                                while ($p = mysqli_fetch_assoc($peserta)):
+                                    $lastPrintQuery = mysqli_query($conn, "SELECT created_at FROM riwayat_cetak_idcard WHERE peserta_id = '" . $p['id'] . "' ORDER BY created_at DESC LIMIT 1");
+                                    $lastPrintData = $lastPrintQuery ? mysqli_fetch_assoc($lastPrintQuery) : null;
                             ?>
                             <tr>
-                                <td>
-                                    <input type="checkbox" name="selected_peserta[]" value="<?= $p['id'] ?>" class="peserta-checkbox">
-                                </td>
+                                <td><input type="checkbox" name="selected_peserta[]" value="<?= $p['id'] ?>" class="peserta-checkbox"></td>
                                 <td>
                                     <div class="d-flex align-items-center">
                                         <div class="avatar-sm me-3" style="width: 40px; height: 40px; background: var(--primary-color); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600;">
                                             <?= strtoupper(substr($p['nama'], 0, 1)) ?>
                                         </div>
-                                        <div>
-                                            <div class="fw-semibold"><?= htmlspecialchars($p['nama']) ?></div>
-                                            <small class="text-muted"><?= htmlspecialchars($p['nama_user'] ?? 'N/A') ?></small>
-                                        </div>
+                                        <div class="fw-semibold"><?= htmlspecialchars($p['nama']) ?></div>
                                     </div>
                                 </td>
+                                <td><span class="status-badge status-<?= $p['status'] ?>"><?= ucfirst($p['status']) ?></span></td>
                                 <td>
-                                    <span class="status-badge status-<?= $p['status'] ?>">
-                                        <?= ucfirst($p['status']) ?>
-                                    </span>
-                                </td>
-                                <td>
-                                    <?php if(file_exists("qr_codes/peserta_".$p['id'].".png")): ?>
-                                        <i class="fas fa-check-circle text-success"></i> Tersedia
-                                    <?php else: ?>
-                                        <i class="fas fa-times-circle text-danger"></i> Belum Ada
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <?php if($lastPrintData && isset($lastPrintData['created_at'])): ?>
+                                    <?php if ($lastPrintData && isset($lastPrintData['created_at'])): ?>
                                         <small><?= date('d/m/Y H:i', strtotime($lastPrintData['created_at'])) ?></small>
                                     <?php else: ?>
                                         <small class="text-muted">Belum pernah</small>
                                     <?php endif; ?>
                                 </td>
-                                <td>
-                                    <div class="action-group">
-                                        <a href="print_idcard.php?id=<?= $p['id'] ?>" target="_blank" class="btn-sm btn-primary" title="Cetak Satuan">
-                                            <i class="fas fa-print"></i>
-                                        </a>
-                                        <a href="preview_idcard.php?id=<?= $p['id'] ?>" class="btn-sm btn-info" title="Preview">
-                                            <i class="fas fa-eye"></i>
-                                        </a>
-                                        <a href="generate_qr.php?id=<?= $p['id'] ?>" class="btn-sm btn-success" title="Generate QR">
-                                            <i class="fas fa-qrcode"></i>
-                                        </a>
-                                    </div>
+                                <td class="action-group">
+                                    <?php if ($role == 'admin'): ?>
+                                        <button class="btn btn-danger btn-sm" onclick="hapusPeserta(<?= $p['id'] ?>, '<?= addslashes($p['nama']) ?>')"><i class="fas fa-trash"></i></button>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
-                            <?php 
-                                endwhile; 
-                            } else {
-                                // No data or query failed
-                                echo "<tr><td colspan='6' class='text-center text-muted'>Tidak ada data peserta atau terjadi kesalahan query</td></tr>";
-                            }
-                            ?>
+                            <?php endwhile; ?>
+                            <?php } else { ?>
+                                <tr><td colspan="5" class="text-center py-5 text-muted"><i class="fas fa-inbox fa-3x mb-3"></i><h5>Tidak ada data peserta</h5></td></tr>
+                            <?php } ?>
                         </tbody>
                     </table>
                 </div>
                 
                 <div class="pagination-wrapper">
                     <div class="d-flex justify-content-between align-items-center">
-                        <div>
+                        <div class="d-flex gap-2">
                             <button class="btn btn-primary" onclick="cetakTerpilih()" id="btnCetakTerpilih" disabled>
-                                <i class="fas fa-print"></i>
-                                Cetak Terpilih (<span id="jumlahTerpilih">0</span>)
+                                <i class="fas fa-print"></i> Cetak Terpilih (<span id="jumlahTerpilih">0</span>)
                             </button>
+                            <a href="riwayat_cetak.php" class="btn btn-warning">
+                                <i class="fas fa-history"></i> Riwayat Cetak
+                            </a>
                         </div>
                         <div>
                             <small class="text-muted">Total: <?= $totalPeserta ?> peserta</small>
@@ -780,6 +634,31 @@ $riwayatCetak = $riwayatCetakQuery ? mysqli_num_rows($riwayatCetakQuery) : 0;
             </div>
         </main>
     </div>
+
+    <!-- Modal Hapus Peserta -->
+    <?php if ($role == 'admin'): ?>
+    <div class="modal fade" id="deletePesertaModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-exclamation-triangle text-danger"></i> Konfirmasi Hapus</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="post">
+                    <div class="modal-body">
+                        <input type="hidden" name="peserta_id" id="delete_peserta_id">
+                        <div class="alert alert-warning"><i class="fas fa-exclamation-triangle"></i> Hapus peserta ini?</div>
+                        <p class="text-center"><strong>Nama:</strong> <span id="delete_peserta_nama"></span></p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" name="hapus_peserta" class="btn btn-danger">Hapus</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
@@ -794,11 +673,7 @@ $riwayatCetak = $riwayatCetakQuery ? mysqli_num_rows($riwayatCetakQuery) : 0;
                 const nameCell = rows[i].getElementsByTagName('td')[1];
                 if (nameCell) {
                     const textValue = nameCell.textContent || nameCell.innerText;
-                    if (textValue.toUpperCase().indexOf(filter) > -1) {
-                        rows[i].style.display = '';
-                    } else {
-                        rows[i].style.display = 'none';
-                    }
+                    rows[i].style.display = textValue.toUpperCase().indexOf(filter) > -1 ? '' : 'none';
                 }
             }
         }
@@ -810,11 +685,7 @@ $riwayatCetak = $riwayatCetakQuery ? mysqli_num_rows($riwayatCetakQuery) : 0;
         function toggleAllCheckbox() {
             const selectAll = document.getElementById('selectAll');
             const checkboxes = document.querySelectorAll('.peserta-checkbox');
-            
-            checkboxes.forEach(checkbox => {
-                checkbox.checked = selectAll.checked;
-            });
-            
+            checkboxes.forEach(checkbox => checkbox.checked = selectAll.checked);
             updateCetakButton();
         }
 
@@ -822,26 +693,17 @@ $riwayatCetak = $riwayatCetakQuery ? mysqli_num_rows($riwayatCetakQuery) : 0;
             const checkboxes = document.querySelectorAll('.peserta-checkbox:checked');
             const btnCetak = document.getElementById('btnCetakTerpilih');
             const jumlahSpan = document.getElementById('jumlahTerpilih');
-            
             jumlahSpan.textContent = checkboxes.length;
-            
-            if (checkboxes.length > 0) {
-                btnCetak.disabled = false;
-                btnCetak.classList.remove('btn-secondary');
-                btnCetak.classList.add('btn-primary');
-            } else {
-                btnCetak.disabled = true;
-                btnCetak.classList.remove('btn-primary');
-                btnCetak.classList.add('btn-secondary');
-            }
+            btnCetak.disabled = checkboxes.length === 0;
+            btnCetak.classList.toggle('btn-primary', checkboxes.length > 0);
+            btnCetak.classList.toggle('btn-secondary', checkboxes.length === 0);
         }
 
         // Add event listeners to all checkboxes
         document.addEventListener('DOMContentLoaded', function() {
             const checkboxes = document.querySelectorAll('.peserta-checkbox');
-            checkboxes.forEach(checkbox => {
-                checkbox.addEventListener('change', updateCetakButton);
-            });
+            checkboxes.forEach(checkbox => checkbox.addEventListener('change', updateCetakButton));
+            updateCetakButton();
         });
 
         // Cetak terpilih function
@@ -851,166 +713,45 @@ $riwayatCetak = $riwayatCetakQuery ? mysqli_num_rows($riwayatCetakQuery) : 0;
                 alert('Pilih minimal satu peserta untuk dicetak!');
                 return;
             }
-
             const selectedIds = Array.from(checkboxes).map(cb => cb.value);
-            const url = 'cetak_massal.php?ids=' + selectedIds.join(',');
-            window.open(url, '_blank');
-            
-            // Log riwayat cetak
+            window.open('cetak_massal.php?ids=' + selectedIds.join(','), '_blank');
             fetch('log_cetak.php', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    peserta_ids: selectedIds,
-                    jenis_cetak: 'massal'
-                })
-            });
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ peserta_ids: selectedIds, jenis_cetak: 'massal' })
+            }).then(response => response.json())
+              .then(data => {
+                  if (data.status === 'success') {
+                      alert('Riwayat cetak berhasil disimpan!');
+                      location.reload(); // Refresh untuk update statistik
+                  } else {
+                      alert('Gagal menyimpan riwayat cetak: ' + data.message);
+                  }
+              })
+              .catch(error => {
+                  console.error('Error:', error);
+                  alert('Terjadi kesalahan saat menyimpan riwayat cetak');
+              });
         }
 
-        // Add active class to current page
-        document.addEventListener('DOMContentLoaded', function() {
-            const currentPath = window.location.pathname;
-            const navLinks = document.querySelectorAll('.nav-link');
-            
-            navLinks.forEach(link => {
-                if (link.getAttribute('href') && currentPath.includes(link.getAttribute('href'))) {
-                    link.classList.add('active');
-                }
-            });
-        });
-        
-        // Add smooth transitions
-        document.querySelectorAll('.stat-card, .action-btn').forEach(element => {
-            element.addEventListener('mouseenter', function() {
-                this.style.transform = 'translateY(-5px)';
-            });
-            
-            element.addEventListener('mouseleave', function() {
-                this.style.transform = 'translateY(0)';
-            });
-        });
-
-        // Preview ID Card function
-        function previewIdCard(id) {
-            window.open('preview_idcard.php?id=' + id, '_blank', 'width=800,height=600');
-        }
-
-        // Generate QR Code function
-        function generateQR(id) {
-            fetch('generate_qr.php?ajax=1&id=' + id)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        location.reload();
-                    } else {
-                        alert('Gagal generate QR Code: ' + data.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Terjadi kesalahan saat generate QR Code');
-                });
-        }
-
-        // Export functions
-        function exportToExcel() {
-            window.open('export_peserta.php?format=excel', '_blank');
-        }
-
-        function exportToPDF() {
-            window.open('export_peserta.php?format=pdf', '_blank');
-        }
-
-        // Print statistics
-        function printStatistics() {
-            const printContent = `
-                <div style="font-family: Arial, sans-serif; padding: 20px;">
-                    <h2>Statistik ID Card Peserta</h2>
-                    <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-                        <tr>
-                            <td style="border: 1px solid #ddd; padding: 10px;"><strong>Total Peserta</strong></td>
-                            <td style="border: 1px solid #ddd; padding: 10px;"><?= $totalPeserta ?></td>
-                        </tr>
-                        <tr>
-                            <td style="border: 1px solid #ddd; padding: 10px;"><strong>Peserta Aktif</strong></td>
-                            <td style="border: 1px solid #ddd; padding: 10px;"><?= $pesertaAktif ?></td>
-                        </tr>
-                        <tr>
-                            <td style="border: 1px solid #ddd; padding: 10px;"><strong>Peserta Selesai</strong></td>
-                            <td style="border: 1px solid #ddd; padding: 10px;"><?= $pesertaSelesai ?></td>
-                        </tr>
-                        <tr>
-                            <td style="border: 1px solid #ddd; padding: 10px;"><strong>Riwayat Cetak</strong></td>
-                            <td style="border: 1px solid #ddd; padding: 10px;"><?= $riwayatCetak ?></td>
-                        </tr>
-                    </table>
-                    <p style="margin-top: 20px; font-size: 12px; color: #666;">
-                        Dicetak pada: ${new Date().toLocaleDateString('id-ID')}
-                    </p>
-                </div>
-            `;
-            
-            const printWindow = window.open('', '_blank');
-            printWindow.document.write(printContent);
-            printWindow.document.close();
-            printWindow.print();
-        }
-
-        // Bulk actions
-        function bulkGenerateQR() {
-            const checkboxes = document.querySelectorAll('.peserta-checkbox:checked');
-            if (checkboxes.length === 0) {
-                alert('Pilih minimal satu peserta untuk generate QR Code!');
-                return;
-            }
-
-            const selectedIds = Array.from(checkboxes).map(cb => cb.value);
-            
-            if (confirm(`Generate QR Code untuk ${selectedIds.length} peserta?`)) {
-                fetch('generate_qr.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        ids: selectedIds,
-                        bulk: true
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert(`Berhasil generate QR Code untuk ${data.count} peserta`);
-                        location.reload();
-                    } else {
-                        alert('Gagal generate QR Code: ' + data.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Terjadi kesalahan saat generate QR Code');
-                });
-            }
+        // Delete peserta function
+        function hapusPeserta(id, nama) {
+            document.getElementById('delete_peserta_id').value = id;
+            document.getElementById('delete_peserta_nama').textContent = nama;
+            new bootstrap.Modal(document.getElementById('deletePesertaModal')).show();
         }
 
         // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
-            // Ctrl + A untuk select all
             if (e.ctrlKey && e.key === 'a') {
                 e.preventDefault();
                 document.getElementById('selectAll').checked = true;
                 toggleAllCheckbox();
             }
-            
-            // Ctrl + P untuk cetak terpilih
             if (e.ctrlKey && e.key === 'p') {
                 e.preventDefault();
                 cetakTerpilih();
             }
-            
-            // Escape untuk clear selection
             if (e.key === 'Escape') {
                 document.getElementById('selectAll').checked = false;
                 toggleAllCheckbox();
@@ -1019,55 +760,11 @@ $riwayatCetak = $riwayatCetakQuery ? mysqli_num_rows($riwayatCetakQuery) : 0;
 
         // Auto-refresh every 30 seconds
         setInterval(function() {
-            // Only refresh if no checkboxes are selected
             const checkboxes = document.querySelectorAll('.peserta-checkbox:checked');
             if (checkboxes.length === 0) {
                 location.reload();
             }
         }, 30000);
     </script>
-
-    <!-- Additional Action Buttons (Floating) -->
-    <div style="position: fixed; bottom: 20px; right: 20px; z-index: 1000;">
-        <div class="btn-group-vertical" role="group">
-            <button type="button" class="btn btn-primary btn-sm" onclick="bulkGenerateQR()" title="Bulk Generate QR">
-                <i class="fas fa-qrcode"></i>
-            </button>
-            <button type="button" class="btn btn-info btn-sm" onclick="exportToExcel()" title="Export ke Excel">
-                <i class="fas fa-file-excel"></i>
-            </button>
-            <button type="button" class="btn btn-success btn-sm" onclick="exportToPDF()" title="Export ke PDF">
-                <i class="fas fa-file-pdf"></i>
-            </button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="printStatistics()" title="Print Statistik">
-                <i class="fas fa-chart-bar"></i>
-            </button>
-        </div>
-    </div>
-
-    <!-- Toast Notifications -->
-    <div class="toast-container position-fixed bottom-0 end-0 p-3">
-        <div id="successToast" class="toast" role="alert">
-            <div class="toast-header">
-                <i class="fas fa-check-circle text-success me-2"></i>
-                <strong class="me-auto">Berhasil</strong>
-                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
-            </div>
-            <div class="toast-body">
-                Operasi berhasil dilakukan!
-            </div>
-        </div>
-        
-        <div id="errorToast" class="toast" role="alert">
-            <div class="toast-header">
-                <i class="fas fa-exclamation-circle text-danger me-2"></i>
-                <strong class="me-auto">Error</strong>
-                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
-            </div>
-            <div class="toast-body">
-                Terjadi kesalahan!
-            </div>
-        </div>
-    </div>
 </body>
 </html>

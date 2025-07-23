@@ -22,15 +22,6 @@ if (isset($_POST['login'])) {
         $error = "User tidak ditemukan.";     
     } 
 }  
-
-if (isset($_POST['register'])) {     
-    $nama = $_POST['nama'];     
-    $email = $_POST['email'];     
-    $password = password_hash($_POST['password'], PASSWORD_DEFAULT);     
-    mysqli_query($conn, "INSERT INTO users(nama,email,password,role) VALUES('$nama','$email','$password','user')");     
-    header("Location: login.php");     
-    exit; 
-} 
 ?>
 
 <!DOCTYPE html>
@@ -61,7 +52,9 @@ if (isset($_POST['register'])) {
         
         body {
             font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: 
+                linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)),
+                url('images/dpupr.webp') center/cover no-repeat;
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -122,12 +115,12 @@ if (isset($_POST['register'])) {
         }
         
         .login-container {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(20px);
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(5px); 
             border-radius: 24px;
             box-shadow: 0 20px 50px rgba(0,0,0,0.2);
             padding: 0;
-            max-width: 900px;
+            max-width: 420px;
             width: 90%;
             overflow: hidden;
             position: relative;
@@ -135,7 +128,7 @@ if (isset($_POST['register'])) {
         }
         
         .login-header {
-            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            background: linear-gradient(135deg, rgba(37, 99, 235, 0.3), rgba(29, 78, 216, 0.3));
             color: white;
             padding: 3rem 2rem 2rem;
             text-align: center;
@@ -168,6 +161,10 @@ if (isset($_POST['register'])) {
             position: relative;
             z-index: 1;
         }
+
+        .login-title, .login-subtitle {
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
         
         .login-title {
             font-size: 2rem;
@@ -186,45 +183,6 @@ if (isset($_POST['register'])) {
         
         .login-body {
             padding: 2rem;
-        }
-        
-        .form-tabs {
-            display: flex;
-            margin-bottom: 2rem;
-            background: #f8fafc;
-            border-radius: 12px;
-            padding: 0.25rem;
-        }
-        
-        .tab-btn {
-            flex: 1;
-            padding: 0.75rem 1rem;
-            border: none;
-            background: transparent;
-            border-radius: 8px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            cursor: pointer;
-        }
-        
-        .tab-btn.active {
-            background: white;
-            color: var(--primary-color);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        
-        .tab-content {
-            display: none;
-        }
-        
-        .tab-content.active {
-            display: block;
-            animation: fadeIn 0.3s ease;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
         }
         
         .form-group {
@@ -246,6 +204,7 @@ if (isset($_POST['register'])) {
             font-size: 1rem;
             transition: all 0.3s ease;
             background: #f9fafb;
+            width: 100%;
         }
         
         .form-control:focus {
@@ -253,6 +212,7 @@ if (isset($_POST['register'])) {
             box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
             background: white;
             transform: translateY(-2px);
+            outline: none;
         }
         
         .input-group {
@@ -276,6 +236,14 @@ if (isset($_POST['register'])) {
         .input-icon:hover {
             color: var(--primary-color);
         }
+
+        .form-label-light {
+            font-weight: 600;
+            color: #ffffff !important;
+            margin-bottom: 0.5rem;
+            display: block;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+        }
         
         .btn-login {
             background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
@@ -289,28 +257,12 @@ if (isset($_POST['register'])) {
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
+            cursor: pointer;
         }
         
         .btn-login:hover {
             transform: translateY(-2px);
             box-shadow: 0 10px 30px rgba(37, 99, 235, 0.3);
-        }
-        
-        .btn-register {
-            background: linear-gradient(135deg, var(--success-color), #059669);
-            border: none;
-            padding: 0.875rem 2rem;
-            border-radius: 12px;
-            font-weight: 600;
-            font-size: 1rem;
-            color: white;
-            width: 100%;
-            transition: all 0.3s ease;
-        }
-        
-        .btn-register:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);
         }
         
         .alert {
@@ -334,62 +286,44 @@ if (isset($_POST['register'])) {
             color: #991b1b;
         }
         
-        .alert-success {
-            background: #d1fae5;
-            color: #065f46;
-        }
-        
-        .password-strength {
-            height: 4px;
-            background: #e5e7eb;
-            border-radius: 2px;
-            margin-top: 0.5rem;
-            overflow: hidden;
-        }
-        
-        .password-strength-bar {
-            height: 100%;
-            background: var(--danger-color);
-            width: 0;
-            transition: all 0.3s ease;
-            border-radius: 2px;
-        }
-        
-        .password-strength-text {
-            font-size: 0.75rem;
-            margin-top: 0.25rem;
-            font-weight: 500;
-        }
-        
-        .divider {
+        .register-link {
             text-align: center;
-            margin: 1.5rem 0;
-            position: relative;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid rgba(255,255,255,0.2);
         }
         
-        .divider::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 0;
-            right: 0;
-            height: 1px;
-            background: #e5e7eb;
-        }
-        
-        .divider span {
-            background: white;
-            padding: 0 1rem;
-            color: #6b7280;
+        .register-link p {
+            color: #ffffff;
             font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+        }
+        
+        .register-link a {
+            color: #ffffff;
+            text-decoration: none;
+            font-weight: 600;
+            padding: 0.5rem 1rem;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            display: inline-block;
+            backdrop-filter: blur(10px);
+            background: rgba(255,255,255,0.1);
+        }
+        
+        .register-link a:hover {
+            background: rgba(255,255,255,0.2);
+            border-color: rgba(255,255,255,0.5);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
         }
         
         .form-footer {
             text-align: center;
             margin-top: 1.5rem;
-            padding-top: 1.5rem;
-            border-top: 1px solid #e5e7eb;
-            color: #6b7280;
+            color: #ffffff !important;
             font-size: 0.875rem;
         }
         
@@ -411,6 +345,13 @@ if (isset($_POST['register'])) {
                 padding: 1.5rem;
             }
         }
+        
+        @keyframes ripple-animation {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
     </style>
 </head>
 <body>
@@ -419,10 +360,10 @@ if (isset($_POST['register'])) {
     <div class="login-container">
         <div class="login-header">
             <div class="login-icon">
-                <i class="fas fa-graduation-cap"></i>
+                <img src="images/LogoBanten.png" alt="Logo" style="width: 60px; height: 60px; object-fit: contain;">
             </div>
-            <h1 class="login-title">Sistem Magang</h1>
-            <p class="login-subtitle">Kelola program magang dengan mudah dan efisien</p>
+            <h1 class="login-title">SPAM</h1>
+            <p class="login-subtitle">Sistem Pengelolaan Administrasi Magang DPUPR Banten</p>
         </div>
         
         <div class="login-body">
@@ -433,93 +374,46 @@ if (isset($_POST['register'])) {
                 </div>
             <?php endif; ?>
             
-            <div class="form-tabs">
-                <button class="tab-btn active" onclick="switchTab('login')">
-                    <i class="fas fa-sign-in-alt me-2"></i>
-                    Masuk
-                </button>
-                <button class="tab-btn" onclick="switchTab('register')">
-                    <i class="fas fa-user-plus me-2"></i>
-                    Daftar
-                </button>
-            </div>
-            
             <!-- Login Form -->
-            <div id="login-tab" class="tab-content active">
-                <form method="post" id="loginForm">
-                    <div class="form-group">
-                        <label class="form-label">
-                            <i class="fas fa-envelope me-2"></i>
-                            Email
-                        </label>
-                        <input type="email" name="email" class="form-control" placeholder="Masukkan email Anda" required>
+            <form method="post" id="loginForm">
+                <div class="form-group">
+                    <label class="form-label-light">
+                        <i class="fas fa-envelope me-2"></i>
+                        Email
+                    </label>
+                    <input type="email" name="email" class="form-control" placeholder="Masukkan email Anda" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label-light">
+                        <i class="fas fa-lock me-2"></i>
+                        Password
+                    </label>
+                    <div class="input-group">
+                        <input type="password" name="password" id="loginPassword" class="form-control" placeholder="Masukkan password Anda" required>
+                        <span class="input-icon" onclick="togglePassword('loginPassword', this)">
+                            <i class="fas fa-eye"></i>
+                        </span>
                     </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">
-                            <i class="fas fa-lock me-2"></i>
-                            Password
-                        </label>
-                        <div class="input-group">
-                            <input type="password" name="password" id="loginPassword" class="form-control" placeholder="Masukkan password Anda" required>
-                            <span class="input-icon" onclick="togglePassword('loginPassword', this)">
-                                <i class="fas fa-eye"></i>
-                            </span>
-                        </div>
-                    </div>
-                    
-                    <button type="submit" name="login" class="btn-login">
-                        <i class="fas fa-sign-in-alt me-2"></i>
-                        Masuk ke Dashboard
-                    </button>
-                </form>
-            </div>
+                </div>
+                
+                <button type="submit" name="login" class="btn-login">
+                    <i class="fas fa-sign-in-alt me-2"></i>
+                    Masuk ke Dashboard
+                </button>
+            </form>
             
-            <!-- Register Form -->
-            <div id="register-tab" class="tab-content">
-                <form method="post" id="registerForm">
-                    <div class="form-group">
-                        <label class="form-label">
-                            <i class="fas fa-user me-2"></i>
-                            Nama Lengkap
-                        </label>
-                        <input type="text" name="nama" class="form-control" placeholder="Masukkan nama lengkap" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">
-                            <i class="fas fa-envelope me-2"></i>
-                            Email
-                        </label>
-                        <input type="email" name="email" class="form-control" placeholder="Masukkan email Anda" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">
-                            <i class="fas fa-lock me-2"></i>
-                            Password
-                        </label>
-                        <div class="input-group">
-                            <input type="password" name="password" id="registerPassword" class="form-control" placeholder="Buat password yang kuat" required>
-                            <span class="input-icon" onclick="togglePassword('registerPassword', this)">
-                                <i class="fas fa-eye"></i>
-                            </span>
-                        </div>
-                        <div class="password-strength">
-                            <div class="password-strength-bar" id="strengthBar"></div>
-                        </div>
-                        <div class="password-strength-text" id="strengthText"></div>
-                    </div>
-                    
-                    <button type="submit" name="register" class="btn-register">
-                        <i class="fas fa-user-plus me-2"></i>
-                        Daftar Sebagai User
-                    </button>
-                </form>
+            <!-- Register Link -->
+            <div class="register-link">
+                <p>Belum punya akun?</p>
+                <a href="register.php">
+                    <i class="fas fa-user-plus me-2"></i>
+                    Daftar Sekarang
+                </a>
             </div>
             
             <div class="form-footer">
-                <p>© 2025 Sistem Magang. Dikembangkan menggunakan php native</p>
+                <p>© 2025 Sistem Pengelolaan Administrasi Magang DPUPR Banten.</p>
             </div>
         </div>
     </div>
@@ -527,17 +421,6 @@ if (isset($_POST['register'])) {
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
-        // Switch between tabs
-        function switchTab(tab) {
-            // Remove active class from all tabs and content
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-            
-            // Add active class to clicked tab and corresponding content
-            event.target.classList.add('active');
-            document.getElementById(tab + '-tab').classList.add('active');
-        }
-        
         // Toggle password visibility
         function togglePassword(inputId, icon) {
             const input = document.getElementById(inputId);
@@ -553,46 +436,6 @@ if (isset($_POST['register'])) {
                 iconElement.classList.add('fa-eye');
             }
         }
-        
-        // Password strength checker
-        function checkPasswordStrength(password) {
-            let score = 0;
-            let feedback = '';
-            
-            // Length check
-            if (password.length >= 8) score += 1;
-            if (password.length >= 12) score += 1;
-            
-            // Character variety
-            if (/[a-z]/.test(password)) score += 1;
-            if (/[A-Z]/.test(password)) score += 1;
-            if (/[0-9]/.test(password)) score += 1;
-            if (/[^A-Za-z0-9]/.test(password)) score += 1;
-            
-            const strengthBar = document.getElementById('strengthBar');
-            const strengthText = document.getElementById('strengthText');
-            
-            if (score <= 2) {
-                strengthBar.style.width = '33%';
-                strengthBar.style.background = '#ef4444';
-                feedback = 'Lemah';
-            } else if (score <= 4) {
-                strengthBar.style.width = '66%';
-                strengthBar.style.background = '#f59e0b';
-                feedback = 'Sedang';
-            } else {
-                strengthBar.style.width = '100%';
-                strengthBar.style.background = '#10b981';
-                feedback = 'Kuat';
-            }
-            
-            strengthText.textContent = feedback;
-        }
-        
-        // Event listener for register password
-        document.getElementById('registerPassword').addEventListener('input', function(e) {
-            checkPasswordStrength(e.target.value);
-        });
         
         // Form animations
         document.querySelectorAll('.form-control').forEach(input => {
@@ -620,51 +463,32 @@ if (isset($_POST['register'])) {
         });
         
         // Button ripple effect
-        document.querySelectorAll('.btn-login, .btn-register').forEach(button => {
-            button.addEventListener('click', function(e) {
-                const ripple = document.createElement('span');
-                const rect = this.getBoundingClientRect();
-                const size = Math.max(rect.width, rect.height);
-                const x = e.clientX - rect.left - size / 2;
-                const y = e.clientY - rect.top - size / 2;
-                
-                ripple.style.cssText = `
-                    position: absolute;
-                    border-radius: 50%;
-                    background: rgba(255, 255, 255, 0.6);
-                    pointer-events: none;
-                    width: ${size}px;
-                    height: ${size}px;
-                    left: ${x}px;
-                    top: ${y}px;
-                    transform: scale(0);
-                    animation: ripple-animation 0.6s linear;
-                `;
-                
-                this.appendChild(ripple);
-                
-                setTimeout(() => {
-                    ripple.remove();
-                }, 600);
-            });
-        });
-        
-        // Add ripple animation CSS
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes ripple-animation {
-                to {
-                    transform: scale(4);
-                    opacity: 0;
-                }
-            }
+        document.querySelector('.btn-login').addEventListener('click', function(e) {
+            const ripple = document.createElement('span');
+            const rect = this.getBoundingClientRect();
+            const size = Math.max(rect.width, rect.height);
+            const x = e.clientX - rect.left - size / 2;
+            const y = e.clientY - rect.top - size / 2;
             
-            .btn-login, .btn-register {
-                position: relative;
-                overflow: hidden;
-            }
-        `;
-        document.head.appendChild(style);
+            ripple.style.cssText = `
+                position: absolute;
+                border-radius: 50%;
+                background: rgba(255, 255, 255, 0.6);
+                pointer-events: none;
+                width: ${size}px;
+                height: ${size}px;
+                left: ${x}px;
+                top: ${y}px;
+                transform: scale(0);
+                animation: ripple-animation 0.6s linear;
+            `;
+            
+            this.appendChild(ripple);
+            
+            setTimeout(() => {
+                ripple.remove();
+            }, 600);
+        });
     </script>
 </body>
 </html>

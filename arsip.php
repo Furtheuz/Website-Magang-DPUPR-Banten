@@ -8,8 +8,8 @@ $userName = $_SESSION['user']['name'] ?? 'User';
 
 // Role-based styling
 $roleColors = [
-    'admin' => ['primary' => '#dc2626', 'secondary' => '#fef2f2', 'accent' => '#b91c1c'],
-    'pembimbing' => ['primary' => '#059669', 'secondary' => '#f0fdf4', 'accent' => '#047857'],
+    'admin' => ['primary' => '#2563eb', 'secondary' => '#eff6ff', 'accent' => '#1d4ed8'],
+    'pembimbing' => ['primary' => '#2563eb', 'secondary' => '#eff6ff', 'accent' => '#1d4ed8'],
     'user' => ['primary' => '#2563eb', 'secondary' => '#eff6ff', 'accent' => '#1d4ed8']
 ];
 
@@ -19,7 +19,7 @@ $roleIcons = [
     'user' => '👨‍🎓'
 ];
 
-$currentTheme = $roleColors[$role];
+$currentTheme = ['primary' => '#2563eb', 'secondary' => '#eff6ff', 'accent' => '#1d4ed8'];
 
 // Handle actions
 $message = '';
@@ -89,9 +89,8 @@ if (isset($_POST['tambah_institusi'])) {
     $nama = mysqli_real_escape_string($conn, $_POST['nama_institusi']);
     $alamat = mysqli_real_escape_string($conn, $_POST['alamat_institusi']);
     $telepon = mysqli_real_escape_string($conn, $_POST['telepon_institusi']);
-    $email = mysqli_real_escape_string($conn, $_POST['email_institusi']);
     
-    $query = "INSERT INTO institusi (nama, alamat, telepon, email) VALUES ('$nama', '$alamat', '$telepon', '$email')";
+    $query = "INSERT INTO institusi (nama, alamat, telepon) VALUES ('$nama', '$alamat', '$telepon')";
     
     if (mysqli_query($conn, $query)) {
         $message = 'Institusi berhasil ditambahkan!';
@@ -107,9 +106,8 @@ if (isset($_POST['update_institusi'])) {
     $nama = mysqli_real_escape_string($conn, $_POST['nama_institusi']);
     $alamat = mysqli_real_escape_string($conn, $_POST['alamat_institusi']);
     $telepon = mysqli_real_escape_string($conn, $_POST['telepon_institusi']);
-    $email = mysqli_real_escape_string($conn, $_POST['email_institusi']);
     
-    $query = "UPDATE institusi SET nama='$nama', alamat='$alamat', telepon='$telepon', email='$email' WHERE id=$id";
+    $query = "UPDATE institusi SET nama='$nama', alamat='$alamat', telepon='$telepon' WHERE id=$id";
     
     if (mysqli_query($conn, $query)) {
         $message = 'Institusi berhasil diupdate!';
@@ -662,61 +660,28 @@ $total_institusi = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as to
                 <div class="user-name"><?= htmlspecialchars($userName) ?></div>
                 <div class="user-role"><?= ucfirst($role) ?></div>
             </div>
-            
+
             <div class="nav-menu">
-                <div class="nav-item">
-                    <a class="nav-link" href="dashboard.php">
-                        <i class="fas fa-home"></i>
-                            Dashboard
-                      </a>
-      </div>
-                <?php if ($role == 'admin' || $role == 'pembimbing'): ?>
-                    <div class="nav-item">
-                        <a class="nav-link" href="peserta.php">
-                            <i class="fas fa-users"></i>
-                            Data Peserta
-                        </a>
-                </div>
-                <?php endif; ?>
                 <?php if ($role == 'admin'): ?>
-                    <div class="nav-item">
-                        <a class="nav-link" href="jadwal.php">
-                            <i class="fas fa-calendar-alt"></i>
-                            Jadwal
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link" href="laporan.php">
-                            <i class="fas fa-chart-line"></i>
-                            Laporan
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link" href="idcard.php">
-                            <i class="fas fa-id-card"></i>
-                            Cetak ID Card
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link" href="arsip.php">
-                            <i class="fas fa-archive"></i>
-                            Arsip
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link" href="settings.php">
-                            <i class="fas fa-cog"></i>
-                            Pengaturan
-                        </a>
-                </div>
+                    <div class="nav-item"><a class="nav-link" href="dashboard.php"><i class="fas fa-home"></i> Dashboard</a></div>
+                    <div class="nav-item"><a class="nav-link" href="peserta.php"><i class="fas fa-users"></i> Data Peserta</a></div>
+                    <div class="nav-item"><a class="nav-link" href="jadwal.php"><i class="fas fa-calendar-alt"></i> Jadwal</a></div>
+                    <div class="nav-item"><a class="nav-link" href="laporan.php"><i class="fas fa-chart-line"></i> Laporan</a></div>
+                    <div class="nav-item"><a class="nav-link" href="idcard.php"><i class="fas fa-id-card"></i> Cetak ID Card</a></div>
+                    <div class="nav-item"><a class="nav-link" href="arsip.php"><i class="fas fa-archive"></i> Arsip</a></div>
+                    <div class="nav-item"><a class="nav-link" href="profile.php"><i class="fas fa-user"></i> Profil</a></div>
+                <?php elseif ($role == 'pembimbing'): ?>
+                    <div class="nav-item"><a class="nav-link" href="dashboard.php"><i class="fas fa-home"></i> Dashboard</a></div>
+                    <div class="nav-item"><a class="nav-link" href="jadwal.php"><i class="fas fa-calendar-check"></i> Jadwal Peserta Bimbingan</a></div>
+                    <div class="nav-item"><a class="nav-link" href="laporan.php"><i class="fas fa-clipboard-check"></i> Validasi Laporan</a></div>
+                    <div class="nav-item"><a class="nav-link" href="profile.php"><i class="fas fa-user"></i> Profil</a></div>
+                <?php elseif ($role == 'user'): ?>
+                    <div class="nav-item"><a class="nav-link" href="dashboard.php"><i class="fas fa-home"></i> Dashboard</a></div>
+                    <div class="nav-item"><a class="nav-link" href="jadwal.php"><i class="fas fa-calendar"></i> Jadwal Saya</a></div>
+                    <div class="nav-item"><a class="nav-link" href="laporan.php"><i class="fas fa-file-alt"></i> Laporan Saya</a></div>
+                    <div class="nav-item"><a class="nav-link" href="profile.php"><i class="fas fa-user"></i> Profil</a></div>
                 <?php endif; ?>
-                
-                <div class="nav-item logout-link">
-                    <a class="nav-link" href="logout.php">
-                        <i class="fas fa-sign-out-alt"></i>
-                        Logout
-                    </a>
-                </div>
+                <div class="nav-item logout-link"><a class="nav-link" href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a></div>
             </div>
         </nav>
 
@@ -914,6 +879,12 @@ $total_institusi = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as to
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">
+                                        <label class="form-label">Nama Institusi *</label>
+                                        <input type="text" name="nama_institusi" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
                                         <label class="form-label">Telepon</label>
                                         <input type="text" name="telepon_institusi" class="form-control">
                                     </div>
@@ -952,7 +923,6 @@ $total_institusi = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as to
                                         <th>Nama Institusi</th>
                                         <th>Alamat</th>
                                         <th>Telepon</th>
-                                        <th>Email</th>
                                         <th>Aksi</th>
                                     </tr>
                                 </thead>
@@ -966,10 +936,9 @@ $total_institusi = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as to
                                             <td><?= htmlspecialchars($row['nama']) ?></td>
                                             <td><?= htmlspecialchars($row['alamat']) ?></td>
                                             <td><?= htmlspecialchars($row['telepon']) ?></td>
-                                            <td><?= htmlspecialchars($row['email']) ?></td>
                                             <td>
                                                 <div class="btn-group">
-                                                    <button onclick="editInstitusi(<?= $row['id'] ?>, '<?= addslashes($row['nama']) ?>', '<?= addslashes($row['alamat']) ?>', '<?= addslashes($row['telepon']) ?>', '<?= addslashes($row['email']) ?>')" 
+                                                    <button onclick="editInstitusi(<?= $row['id'] ?>, '<?= addslashes($row['nama']) ?>', '<?= addslashes($row['alamat']) ?>', '<?= addslashes($row['telepon']) ?>')" 
                                                             class="btn btn-warning btn-sm">
                                                         <i class="fas fa-edit"></i>
                                                         Edit
@@ -987,7 +956,7 @@ $total_institusi = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as to
                                     
                                     <?php if (mysqli_num_rows($institusi) == 0): ?>
                                         <tr>
-                                            <td colspan="6" class="text-center text-muted py-4">
+                                            <td colspan="5" class="text-center text-muted py-4">
                                                 <i class="fas fa-building fa-3x mb-3"></i>
                                                 <br>
                                                 Belum ada data institusi
@@ -1009,7 +978,7 @@ $total_institusi = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as to
         <div class="modal-content">
             <div class="modal-header">
                 <h4>Edit Institusi</h4>
-                <span class="close" onclick="closeModal()">&times;</span>
+                <span class="close" onclick="closeModal()">×</span>
             </div>
             <div class="modal-body">
                 <form method="post" id="editForm">
@@ -1025,10 +994,6 @@ $total_institusi = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as to
                     <div class="form-group">
                         <label class="form-label">Telepon</label>
                         <input type="text" name="telepon_institusi" id="edit_telepon" class="form-control">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Email</label>
-                        <input type="email" name="email_institusi" id="edit_email" class="form-control">
                     </div>
                     <div class="form-group">
                         <button type="submit" name="update_institusi" class="btn btn-primary">
@@ -1070,12 +1035,11 @@ $total_institusi = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as to
         }
 
         // Modal functions
-        function editInstitusi(id, nama, alamat, telepon, email) {
+        function editInstitusi(id, nama, alamat, telepon) {
             document.getElementById('edit_id').value = id;
             document.getElementById('edit_nama').value = nama;
             document.getElementById('edit_alamat').value = alamat;
             document.getElementById('edit_telepon').value = telepon;
-            document.getElementById('edit_email').value = email;
             document.getElementById('editModal').style.display = 'block';
         }
 

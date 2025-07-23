@@ -1,51 +1,118 @@
-<?php 
-include "config/auth.php"; 
-include "config/db.php"; 
-checkLogin();  
+<?php
+include "config/auth.php";
+include "config/db.php";
+checkLogin();
 
-$user = $_SESSION['user']; 
-$role = $user['role']; 
-$user_id = $user['id']; 
+$user = $_SESSION['user'];
+$role = $user['role'];
+$user_id = $user['id'];
 $userName = $user['nama'] ?? 'User';
-$pesan = '';  
+$pesan = '';
+
+// Inisialisasi $peserta_data sebagai null
+$peserta_data = null;
 
 // Role-based styling
 $roleColors = [
-    'admin' => ['primary' => '#dc2626', 'secondary' => '#fef2f2', 'accent' => '#b91c1c'],
-    'pembimbing' => ['primary' => '#059669', 'secondary' => '#f0fdf4', 'accent' => '#047857'],
+    'admin' => ['primary' => '#2563eb', 'secondary' => '#eff6ff', 'accent' => '#1d4ed8'],
+    'pembimbing' => ['primary' => '#2563eb', 'secondary' => '#eff6ff', 'accent' => '#1d4ed8'],
     'user' => ['primary' => '#2563eb', 'secondary' => '#eff6ff', 'accent' => '#1d4ed8']
 ];
 
 $roleIcons = [
     'admin' => '👑',
     'pembimbing' => '👨‍🏫',
-    'user' => '👨‍🎓'
+    'user' => ''
 ];
 
-$currentTheme = $roleColors[$role];
+$currentTheme = ['primary' => '#2563eb', 'secondary' => '#eff6ff', 'accent' => '#1d4ed8'];
 
-// Ganti password 
-if(isset($_POST['ganti_pass'])){     
-    $pw_lama = $_POST['pw_lama'];     
-    $pw_baru = $_POST['pw_baru'];      
+// Handle password change
+if (isset($_POST['ganti_pass'])) {
+    $pw_lama = $_POST['pw_lama'];
+    $pw_baru = $_POST['pw_baru'];
+    $pw_konfirmasi = $_POST['pw_konfirmasi'];
     
-    // cek cocok md5 atau password_hash     
-    $match = password_verify($pw_lama, $user['password']) || md5($pw_lama) === $user['password'];     
-    if($match){         
-        $hash_baru = password_hash($pw_baru, PASSWORD_DEFAULT);         
-        mysqli_query($conn, "UPDATE users SET password='$hash_baru' WHERE id={$user['id']}");         
-        $_SESSION['user']['password'] = $hash_baru;         
-        $pesan = '<div class="alert alert-success"><i class="fas fa-check-circle"></i> Password berhasil diganti.</div>';     
-    }else{         
-        $pesan = '<div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> Password lama salah.</div>';     
-    } 
-} 
+    if ($pw_baru !== $pw_konfirmasi) {
+        $pesan = '<div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> Konfirmasi password tidak cocok.</div>';
+    } elseif (strlen($pw_baru) < 6) {
+        $pesan = '<div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> Password baru minimal 6 karakter.</div>';
+    } else {
+        $match = password_verify($pw_lama, $user['password']) || md5($pw_lama) === $user['password'];
+        if ($match) {
+            $hash_baru = password_hash($pw_baru, PASSWORD_DEFAULT);
+            $stmt = $conn->prepare("UPDATE users SET password=? WHERE id=?");
+            $stmt->bind_param("si", $hash_baru, $user['id']);
+            if ($stmt->execute()) {
+                $_SESSION['user']['password'] = $hash_baru;
+                $pesan = '<div class="alert alert-success"><i class="fas fa-check-circle"></i> Password berhasil diganti.</div>';
+            } else {
+                $pesan = '<div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> Gagal mengganti password.</div>';
+            }
+            $stmt->close();
+        } else {
+            $pesan = '<div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> Password lama salah.</div>';
+        }
+    }
+}
 
 // Get additional user data if exists
-$peserta_data = null;
-if($role === 'user') {
-    $res = mysqli_query($conn, "SELECT p.*, i.nama as institusi_nama FROM peserta p LEFT JOIN institusi i ON p.institusi_id = i.id WHERE p.user_id = $user_id LIMIT 1");
-    $peserta_data = mysqli_fetch_assoc($res);
+if ($role === 'user') {
+    $stmt = $conn->prepare("SELECT p.*, i.nama as institusi_nama FROM peserta p LEFT JOIN institusi i ON p.institusi_id = i.id WHERE p.user_id = ? LIMIT 1");
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $peserta_data = $res->fetch_assoc();
+    $stmt->close();
+}
+
+// Handle profile photo upload (for users only)
+if (isset($_POST['upload_foto']) && $role === 'user') {
+    $target_dir = "Uploads/";
+    $allowed_types = ['jpg', 'jpeg', 'png'];
+    $max_size = 2 * 1024 * 1024; // 2MB
+
+    if (!empty($_FILES['foto']['name'])) {
+        $file = $_FILES['foto'];
+        $file_name = basename($file['name']);
+        $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
+        $file_size = $file['size'];
+        $new_file_name = "profile_" . $user_id . "_" . time() . "." . $file_ext;
+        $target_file = $target_dir . $new_file_name;
+
+        // Validate file
+        if (!in_array($file_ext, $allowed_types)) {
+            $pesan = '<div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> Format file tidak didukung. Gunakan JPG atau PNG.</div>';
+        } elseif ($file_size > $max_size) {
+            $pesan = '<div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> Ukuran file terlalu besar. Maksimal 2MB.</div>';
+        } else {
+            // Delete old photo if exists and valid
+            if ($peserta_data && !empty($peserta_data['foto']) && file_exists($peserta_data['foto'])) {
+                unlink($peserta_data['foto']);
+            }
+            // Move uploaded file
+            if (move_uploaded_file($file['tmp_name'], $target_file)) {
+                $stmt = $conn->prepare("UPDATE peserta SET foto=? WHERE user_id=?");
+                $stmt->bind_param("si", $target_file, $user_id);
+                if ($stmt->execute()) {
+                    $pesan = '<div class="alert alert-success"><i class="fas fa-check-circle"></i> Foto profil berhasil diperbarui.</div>';
+                    // Refresh peserta_data
+                    $stmt = $conn->prepare("SELECT p.*, i.nama as institusi_nama FROM peserta p LEFT JOIN institusi i ON p.institusi_id = i.id WHERE p.user_id = ? LIMIT 1");
+                    $stmt->bind_param("i", $user_id);
+                    $stmt->execute();
+                    $res = $stmt->get_result();
+                    $peserta_data = $res->fetch_assoc();
+                    $stmt->close();
+                } else {
+                    $pesan = '<div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> Gagal memperbarui foto di database.</div>';
+                }
+            } else {
+                $pesan = '<div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> Gagal mengunggah foto.</div>';
+            }
+        }
+    } else {
+        $pesan = '<div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> Pilih file untuk diunggah.</div>';
+    }
 }
 ?>
 
@@ -125,6 +192,13 @@ if($role === 'user') {
             font-size: 2rem;
             backdrop-filter: blur(10px);
             border: 3px solid rgba(255,255,255,0.3);
+        }
+        
+        .user-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
         }
         
         .user-name {
@@ -238,7 +312,7 @@ if($role === 'user') {
         }
         
         .profile-header {
-            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            background: linear-gradient(135deg, #128C7E, #075E54);
             color: white;
             padding: 2rem;
             text-align: center;
@@ -257,8 +331,8 @@ if($role === 'user') {
         }
         
         .profile-avatar {
-            width: 120px;
-            height: 120px;
+            width: 150px;
+            height: 150px;
             background: rgba(255,255,255,0.2);
             border-radius: 50%;
             display: flex;
@@ -270,10 +344,18 @@ if($role === 'user') {
             border: 4px solid rgba(255,255,255,0.3);
             position: relative;
             z-index: 1;
+            overflow: hidden;
+        }
+        
+        .profile-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
         }
         
         .profile-name {
-            font-size: 1.5rem;
+            font-size: 1.75rem;
             font-weight: 700;
             margin-bottom: 0.5rem;
             position: relative;
@@ -294,18 +376,16 @@ if($role === 'user') {
             padding: 2rem;
         }
         
-        .info-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #e5e7eb;
         }
         
-        .info-item {
-            background: #f8fafc;
-            padding: 1.5rem;
-            border-radius: 12px;
-            border-left: 4px solid var(--primary-color);
+        .info-item:last-child {
+            border-bottom: none;
         }
         
         .info-label {
@@ -314,16 +394,14 @@ if($role === 'user') {
             color: #6b7280;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            margin-bottom: 0.5rem;
+            width: 120px;
         }
         
         .info-value {
-            font-size: 1.1rem;
-            font-weight: 600;
+            font-size: 1rem;
+            font-weight: 500;
             color: #1f2937;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
+            flex: 1;
         }
         
         .form-card {
@@ -349,6 +427,7 @@ if($role === 'user') {
             border-radius: 12px;
             padding: 0.75rem 1rem;
             transition: all 0.3s ease;
+            width: 100%;
         }
         
         .form-control:focus {
@@ -411,10 +490,10 @@ if($role === 'user') {
         .id-card-section {
             background: linear-gradient(135deg, #10b981, #059669);
             color: white;
-            padding: 1.5rem;
-            border-radius: 12px;
+            padding: 2rem;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
             margin-bottom: 2rem;
-            text-align: center;
         }
         
         .id-card-section h4 {
@@ -423,6 +502,20 @@ if($role === 'user') {
             align-items: center;
             justify-content: center;
             gap: 0.5rem;
+        }
+        
+        .id-card-guidelines {
+            background: rgba(255,255,255,0.2);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            font-size: 0.875rem;
+            text-align: left;
+        }
+        
+        .id-card-guidelines ul {
+            padding-left: 1.5rem;
+            margin: 0;
         }
         
         .password-strength {
@@ -445,6 +538,33 @@ if($role === 'user') {
             font-size: 0.75rem;
             margin-top: 0.25rem;
             font-weight: 500;
+        }
+        
+        .form-group {
+            position: relative;
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-group .toggle-password {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #6b7280;
+        }
+        
+        .content-container {
+            display: flex;
+            gap: 2rem;
+            flex-wrap: wrap;
+        }
+        
+        .content-container > div {
+            flex: 1;
+            min-width: 300px;
         }
         
         @media (max-width: 768px) {
@@ -472,18 +592,19 @@ if($role === 'user') {
                 padding: 1rem;
             }
             
-            .info-grid {
-                grid-template-columns: 1fr;
-            }
-            
             .profile-header {
                 padding: 1.5rem;
             }
             
             .profile-avatar {
-                width: 100px;
-                height: 100px;
+                width: 120px;
+                height: 120px;
                 font-size: 2.5rem;
+            }
+            
+            .content-container {
+                flex-direction: column;
+                gap: 1rem;
             }
         }
     </style>
@@ -494,126 +615,33 @@ if($role === 'user') {
         <nav class="sidebar">
             <div class="user-profile">
                 <div class="user-avatar">
-                    <?= $roleIcons[$role] ?>
+                    <?php if ($role === 'user' && $peserta_data && !empty($peserta_data['foto'])): ?>
+                        <img src="<?= htmlspecialchars($peserta_data['foto']) ?>" alt="Profile Photo">
+                    <?php else: ?>
+                        <?= $roleIcons[$role] ?>
+                    <?php endif; ?>
                 </div>
                 <div class="user-name"><?= htmlspecialchars($userName) ?></div>
                 <div class="user-role"><?= ucfirst($role) ?></div>
             </div>
-            
+
             <div class="nav-menu">
                 <?php if ($role == 'admin'): ?>
-                    <div class="nav-item">
-                        <a class="nav-link" href="dashboard.php">
-                            <i class="fas fa-home"></i>
-                            Dashboard
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link" href="peserta.php">
-                            <i class="fas fa-users"></i>
-                            Data Peserta
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link" href="institusi.php">
-                            <i class="fas fa-building"></i>
-                            Institusi
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link" href="jadwal.php">
-                            <i class="fas fa-calendar-alt"></i>
-                            Jadwal
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link" href="laporan.php">
-                            <i class="fas fa-chart-line"></i>
-                            Laporan
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link" href="idcard.php">
-                            <i class="fas fa-id-card"></i>
-                            Cetak ID Card
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link" href="arsip.php">
-                            <i class="fas fa-archive"></i>
-                            Arsip
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link active" href="settings.php">
-                            <i class="fas fa-cog"></i>
-                            Pengaturan
-                        </a>
-                    </div>
+                    <div class="nav-item"><a class="nav-link" href="dashboard.php"><i class="fas fa-home"></i> Dashboard</a></div>
+                    <div class="nav-item"><a class="nav-link" href="peserta.php"><i class="fas fa-users"></i> Data Peserta</a></div>
+                    <div class="nav-item"><a class="nav-link" href="schedule_report.php"><i class="fas fa-calendar"></i> Jadwal & Laporan</a></div>
+                    <div class="nav-item"><a class="nav-link" href="idcard.php"><i class="fas fa-id-card"></i> Cetak ID Card</a></div>
+                    <div class="nav-item"><a class="nav-link active" href="profile.php"><i class="fas fa-user"></i> Profil</a></div>
                 <?php elseif ($role == 'pembimbing'): ?>
-                    <div class="nav-item">
-                        <a class="nav-link" href="dashboard.php">
-                            <i class="fas fa-home"></i>
-                            Dashboard
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link" href="jadwal.php">
-                            <i class="fas fa-calendar-check"></i>
-                            Lihat Jadwal
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link" href="laporan.php">
-                            <i class="fas fa-clipboard-check"></i>
-                            Validasi Laporan
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link" href="peserta.php">
-                            <i class="fas fa-user-graduate"></i>
-                            Peserta Bimbingan
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link active" href="profile.php">
-                            <i class="fas fa-user"></i>
-                            Profil
-                        </a>
-                    </div>
+                    <div class="nav-item"><a class="nav-link" href="dashboard.php"><i class="fas fa-home"></i> Dashboard</a></div>
+                    <div class="nav-item"><a class="nav-link" href="schedule_report.php"><i class="fas fa-calendar"></i> Jadwal & Laporan</a></div>
+                    <div class="nav-item"><a class="nav-link active" href="profile.php"><i class="fas fa-user"></i> Profil</a></div>
                 <?php elseif ($role == 'user'): ?>
-                    <div class="nav-item">
-                        <a class="nav-link" href="dashboard.php">
-                            <i class="fas fa-home"></i>
-                            Dashboard
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link" href="jadwal.php">
-                            <i class="fas fa-calendar"></i>
-                            Jadwal Saya
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link" href="laporan.php">
-                            <i class="fas fa-file-alt"></i>
-                            Laporan Saya
-                        </a>
-                    </div>
-                    <div class="nav-item">
-                        <a class="nav-link active" href="profile.php">
-                            <i class="fas fa-user"></i>
-                            Profil
-                        </a>
-                    </div>
+                    <div class="nav-item"><a class="nav-link" href="dashboard.php"><i class="fas fa-home"></i> Dashboard</a></div>
+                    <div class="nav-item"><a class="nav-link" href="schedule_report.php"><i class="fas fa-calendar"></i> Jadwal & Laporan</a></div>
+                    <div class="nav-item"><a class="nav-link active" href="profile.php"><i class="fas fa-user"></i> Profil</a></div>
                 <?php endif; ?>
-                
-                <div class="nav-item logout-link">
-                    <a class="nav-link" href="logout.php">
-                        <i class="fas fa-sign-out-alt"></i>
-                        Logout
-                    </a>
-                </div>
+                <div class="nav-item logout-link"><a class="nav-link" href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a></div>
             </div>
         </nav>
 
@@ -629,109 +657,83 @@ if($role === 'user') {
 
             <?= $pesan ?>
 
-            <!-- Profile Card -->
-            <div class="profile-card">
-                <div class="profile-header">
-                    <div class="profile-avatar">
-                        <?= $roleIcons[$role] ?>
+            <div class="content-container">
+                <!-- Profile Card -->
+                <div class="profile-card">
+                    <div class="profile-header">
+                        <div class="profile-avatar">
+                            <?php if ($role === 'user' && $peserta_data && !empty($peserta_data['foto'])): ?>
+                                <img src="<?= htmlspecialchars($peserta_data['foto']) ?>" alt="Profile Photo">
+                            <?php else: ?>
+                                <?= $roleIcons[$role] ?>
+                            <?php endif; ?>
+                        </div>
+                        <div class="profile-name"><?= htmlspecialchars($user['nama']) ?></div>
+                        <div class="profile-role"><?= ucfirst($role) ?></div>
                     </div>
-                    <div class="profile-name"><?= htmlspecialchars($user['nama']) ?></div>
-                    <div class="profile-role"><?= ucfirst($role) ?></div>
-                </div>
-                
-                <div class="profile-body">
-                    <div class="info-grid">
+                    
+                    <div class="profile-body">
                         <div class="info-item">
-                            <div class="info-label">Nama Lengkap</div>
-                            <div class="info-value">
-                                <i class="fas fa-user"></i>
-                                <?= htmlspecialchars($user['nama']) ?>
-                            </div>
+                            <div class="info-label"><i class="fas fa-user me-1"></i> Nama</div>
+                            <div class="info-value"><?= htmlspecialchars($user['nama']) ?></div>
                         </div>
-                        
                         <div class="info-item">
-                            <div class="info-label">Email</div>
-                            <div class="info-value">
-                                <i class="fas fa-envelope"></i>
-                                <?= htmlspecialchars($user['email']) ?>
-                            </div>
+                            <div class="info-label"><i class="fas fa-envelope me-1"></i> Email</div>
+                            <div class="info-value"><?= htmlspecialchars($user['email']) ?></div>
                         </div>
-                        
                         <div class="info-item">
-                            <div class="info-label">Role</div>
-                            <div class="info-value">
-                                <i class="fas fa-shield-alt"></i>
-                                <?= ucfirst($user['role']) ?>
-                            </div>
+                            <div class="info-label"><i class="fas fa-shield-alt me-1"></i> Role</div>
+                            <div class="info-value"><?= ucfirst($user['role']) ?></div>
                         </div>
-                        
                         <div class="info-item">
-                            <div class="info-label">Status Akun</div>
-                            <div class="info-value">
-                                <i class="fas fa-check-circle text-success"></i>
-                                Aktif
-                            </div>
+                            <div class="info-label"><i class="fas fa-check-circle text-success me-1"></i> Status</div>
+                            <div class="info-value">Aktif</div>
                         </div>
-                        
-                        <?php if($peserta_data): ?>
+                        <?php if ($peserta_data): ?>
                         <div class="info-item">
-                            <div class="info-label">Institusi</div>
-                            <div class="info-value">
-                                <i class="fas fa-building"></i>
-                                <?= htmlspecialchars($peserta_data['institusi_nama'] ?? 'Belum ditentukan') ?>
-                            </div>
+                            <div class="info-label"><i class="fas fa-building me-1"></i> Institusi</div>
+                            <div class="info-value"><?= htmlspecialchars($peserta_data['institusi_nama'] ?? 'Belum ditentukan') ?></div>
                         </div>
-                        
                         <div class="info-item">
-                            <div class="info-label">Nomor Telepon</div>
+                            <div class="info-label"><i class="fas fa-phone me-1"></i> Telepon</div>
+                            <div class="info-value"><?= htmlspecialchars($peserta_data['telepon'] ?? 'Belum diisi') ?></div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label"><i class="fas fa-camera me-1"></i> Foto Profil</div>
                             <div class="info-value">
-                                <i class="fas fa-phone"></i>
-                                <?= htmlspecialchars($peserta_data['telepon'] ?? 'Belum diisi') ?>
+                                <form method="post" enctype="multipart/form-data">
+                                    <input type="file" name="foto" accept="image/jpeg,image/png" class="form-control mb-2" required>
+                                    <button name="upload_foto" type="submit" class="btn btn-primary">
+                                        <i class="fas fa-upload"></i> Unggah Foto
+                                    </button>
+                                </form>
                             </div>
                         </div>
                         <?php endif; ?>
                     </div>
                 </div>
-            </div>
 
-            <!-- ID Card Section (Only for User) -->
-            <?php if($user['role'] === 'user' && $peserta_data): ?>
-            <div class="id-card-section">
-                <h4>
-                    <i class="fas fa-id-card"></i>
-                    ID Card Digital
-                </h4>
-                <p>Cetak kartu identitas digital Anda untuk keperluan magang</p>
-                <a href="print_idcard.php?id=<?= $peserta_data['id'] ?>" target="_blank" class="btn btn-success">
-                    <i class="fas fa-print"></i>
-                    Cetak ID Card
-                </a>
-            </div>
-            <?php endif; ?>
-
-            <!-- Change Password Form -->
-            <div class="form-card">
-                <h3>
-                    <i class="fas fa-lock"></i>
-                    Ganti Password
-                </h3>
-                <form method="post" id="passwordForm">
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
+                <!-- Password Form -->
+                <div class="form-card">
+                    <h3>
+                        <i class="fas fa-lock"></i>
+                        Ganti Password
+                    </h3>
+                    <form method="post" id="passwordForm">
+                        <div class="form-group">
                             <label class="form-label fw-semibold">Password Lama</label>
-                            <div class="position-relative">
+                            <div class="input-group">
                                 <input type="password" name="pw_lama" class="form-control" placeholder="Masukkan password lama" required>
-                                <button type="button" class="btn btn-outline-secondary position-absolute end-0 top-0 h-100 px-3" onclick="togglePassword(this)">
+                                <button type="button" class="toggle-password btn btn-outline-secondary">
                                     <i class="fas fa-eye"></i>
                                 </button>
                             </div>
                         </div>
-                        
-                        <div class="col-md-6 mb-3">
+                        <div class="form-group">
                             <label class="form-label fw-semibold">Password Baru</label>
-                            <div class="position-relative">
+                            <div class="input-group">
                                 <input type="password" name="pw_baru" id="newPassword" class="form-control" placeholder="Masukkan password baru" required>
-                                <button type="button" class="btn btn-outline-secondary position-absolute end-0 top-0 h-100 px-3" onclick="togglePassword(this)">
+                                <button type="button" class="toggle-password btn btn-outline-secondary">
                                     <i class="fas fa-eye"></i>
                                 </button>
                             </div>
@@ -740,20 +742,50 @@ if($role === 'user') {
                             </div>
                             <div class="password-strength-text" id="strengthText"></div>
                         </div>
-                    </div>
-                    
-                    <div class="d-flex gap-2">
-                        <button name="ganti_pass" type="submit" class="btn btn-primary">
-                            <i class="fas fa-save"></i>
-                            Simpan Password
-                        </button>
-                        <button type="reset" class="btn btn-outline-secondary">
-                            <i class="fas fa-undo"></i>
-                            Reset
-                        </button>
-                    </div>
-                </form>
+                        <div class="form-group">
+                            <label class="form-label fw-semibold">Konfirmasi Password</label>
+                            <div class="input-group">
+                                <input type="password" name="pw_konfirmasi" class="form-control" placeholder="Konfirmasi password baru" required>
+                                <button type="button" class="toggle-password btn btn-outline-secondary">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button name="ganti_pass" type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Simpan Password
+                            </button>
+                            <button type="reset" class="btn btn-outline-secondary">
+                                <i class="fas fa-undo"></i> Reset
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
+
+            <!-- ID Card Section (Only for User) -->
+            <?php if ($role === 'user' && $peserta_data): ?>
+            <div class="id-card-section">
+                <h4>
+                    <i class="fas fa-id-card"></i>
+                    ID Card Digital
+                </h4>
+                <p>Cetak kartu identitas digital Anda untuk keperluan magang</p>
+                <button class="btn btn-success" onclick="cetakIdCard(<?= $peserta_data['id'] ?>)">
+                    <i class="fas fa-print"></i> Cetak ID Card
+                </button>
+                <div class="id-card-guidelines">
+                    <p><strong>Persiapan Cetak ID Card:</strong></p>
+                    <ul>
+                        <li>Pastikan printer dalam kondisi baik dan memiliki tinta yang cukup.</li>
+                        <li>Gunakan kertas foto glossy atau kertas kartu (cardstock) dengan ketebalan minimal 200 gsm untuk hasil terbaik.</li>
+                        <li>Atur pengaturan printer ke kualitas tinggi (high quality) untuk cetakan yang jelas.</li>
+                        <li>Siapkan gunting atau cutter untuk memotong kartu sesuai ukuran standar (86mm x 54mm).</li>
+                        <li>Simpan file ID Card dalam format PDF untuk memastikan kompatibilitas.</li>
+                    </ul>
+                </div>
+            </div>
+            <?php endif; ?>
         </main>
     </div>
 
@@ -763,9 +795,9 @@ if($role === 'user') {
     <script>
         // Toggle password visibility
         function togglePassword(button) {
-            const input = button.parentElement.querySelector('input');
+            const inputGroup = button.parentElement;
+            const input = inputGroup.querySelector('input');
             const icon = button.querySelector('i');
-            
             if (input.type === 'password') {
                 input.type = 'text';
                 icon.classList.remove('fa-eye');
@@ -782,11 +814,8 @@ if($role === 'user') {
             let score = 0;
             let feedback = '';
             
-            // Length check
             if (password.length >= 8) score += 1;
             if (password.length >= 12) score += 1;
-            
-            // Character variety
             if (/[a-z]/.test(password)) score += 1;
             if (/[A-Z]/.test(password)) score += 1;
             if (/[0-9]/.test(password)) score += 1;
@@ -812,30 +841,72 @@ if($role === 'user') {
             strengthText.textContent = feedback;
         }
         
-        // Event listener for password input
         document.getElementById('newPassword').addEventListener('input', function(e) {
             checkPasswordStrength(e.target.value);
+        });
+        
+        // File input validation and preview
+        document.querySelector('input[name="foto"]')?.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const allowedTypes = ['image/jpeg', 'image/png'];
+                const maxSize = 2 * 1024 * 1024; // 2MB
+                if (!allowedTypes.includes(file.type)) {
+                    alert('Format file tidak didukung. Gunakan JPG atau PNG.');
+                    e.target.value = '';
+                } else if (file.size > maxSize) {
+                    alert('Ukuran file terlalu besar. Maksimal 2MB.');
+                    e.target.value = '';
+                } else {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        document.querySelector('.profile-avatar img').src = e.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
         });
         
         // Form validation
         document.getElementById('passwordForm').addEventListener('submit', function(e) {
             const oldPassword = document.querySelector('input[name="pw_lama"]').value;
             const newPassword = document.querySelector('input[name="pw_baru"]').value;
+            const confirmPassword = document.querySelector('input[name="pw_konfirmasi"]').value;
             
             if (oldPassword === newPassword) {
                 e.preventDefault();
                 alert('Password baru harus berbeda dengan password lama!');
-                return false;
-            }
-            
-            if (newPassword.length < 6) {
+            } else if (newPassword !== confirmPassword) {
+                e.preventDefault();
+                alert('Konfirmasi password tidak cocok!');
+            } else if (newPassword.length < 6) {
                 e.preventDefault();
                 alert('Password baru minimal 6 karakter!');
-                return false;
             }
         });
         
-        // Auto-hide alerts after 5 seconds
+        // Cetak ID Card function
+        function cetakIdCard(pesertaId) {
+            window.open('priview_idcard.php?id=' + pesertaId, '_blank');
+            fetch('log_cetak.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'peserta_id=' + pesertaId
+            }).then(response => response.json())
+              .then(data => {
+                  if (data.status === 'success') {
+                      alert('Riwayat cetak berhasil disimpan!');
+                  } else {
+                      alert('Gagal menyimpan riwayat cetak: ' + data.message);
+                  }
+              })
+              .catch(error => {
+                  console.error('Error:', error);
+                  alert('Terjadi kesalahan saat menyimpan riwayat cetak');
+              });
+        }
+        
+        // Alert fade out
         document.addEventListener('DOMContentLoaded', function() {
             const alerts = document.querySelectorAll('.alert');
             alerts.forEach(function(alert) {
@@ -849,99 +920,22 @@ if($role === 'user') {
             });
         });
         
-        // Smooth scrolling for navigation
+        // Navigation link animation
         document.querySelectorAll('.nav-link').forEach(function(link) {
             link.addEventListener('click', function(e) {
-                // Add loading state
                 this.style.opacity = '0.7';
                 setTimeout(() => {
                     this.style.opacity = '1';
-                }, 200);
+                    }, 200);
             });
         });
-        
-        // Add ripple effect to buttons
-        document.querySelectorAll('.btn').forEach(function(button) {
-            button.addEventListener('click', function(e) {
-                const ripple = document.createElement('span');
-                const rect = this.getBoundingClientRect();
-                const size = Math.max(rect.width, rect.height);
-                const x = e.clientX - rect.left - size / 2;
-                const y = e.clientY - rect.top - size / 2;
-                
-                ripple.style.width = ripple.style.height = size + 'px';
-                ripple.style.left = x + 'px';
-                ripple.style.top = y + 'px';
-                ripple.classList.add('ripple');
-                
-                this.appendChild(ripple);
-                
-                setTimeout(() => {
-                    ripple.remove();
-                }, 600);
+
+        // Toggle password buttons
+        document.querySelectorAll('.toggle-password').forEach(button => {
+            button.addEventListener('click', function() {
+                togglePassword(this);
             });
         });
-        
-        // Add CSS for ripple effect
-        const style = document.createElement('style');
-        style.textContent = `
-            .btn {
-                position: relative;
-                overflow: hidden;
-            }
-            
-            .ripple {
-                position: absolute;
-                border-radius: 50%;
-                background: rgba(255, 255, 255, 0.6);
-                pointer-events: none;
-                transform: scale(0);
-                animation: ripple-animation 0.6s linear;
-            }
-            
-            @keyframes ripple-animation {
-                to {
-                    transform: scale(4);
-                    opacity: 0;
-                }
-            }
-            
-            .alert {
-                transition: all 0.3s ease;
-            }
-            
-            .form-control:focus {
-                transform: translateY(-2px);
-                box-shadow: 0 4px 12px rgba(0,0,0,0.1), 0 0 0 3px var(--primary-color)20;
-            }
-            
-            .info-item {
-                transition: all 0.3s ease;
-            }
-            
-            .info-item:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            }
-            
-            .profile-card {
-                transition: all 0.3s ease;
-            }
-            
-            .profile-card:hover {
-                transform: translateY(-5px);
-                box-shadow: 0 12px 40px rgba(0,0,0,0.15);
-            }
-            
-            .sidebar .nav-link {
-                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            }
-            
-            .sidebar .nav-link:hover {
-                padding-left: 1.5rem;
-            }
-        `;
-        document.head.appendChild(style);
     </script>
 </body>
 </html>
